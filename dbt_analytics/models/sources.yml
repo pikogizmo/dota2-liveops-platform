@@ -1,0 +1,21 @@
+version: 2
+
+sources:
+  - name: dota_raw
+    description: "Raw data ingested from OpenDota API via Python ETL"
+    database: neondb
+    schema: raw
+    
+    # 1. Define what "Fresh" means
+    freshness:
+      warn_after: {count: 24, period: hour}
+      error_after: {count: 7, period: day}
+    loaded_at_field: ingested_at # This is the column dbt checks
+    
+    tables:
+      - name: heroes
+        description: "List of Dota 2 heroes and their attributes"
+      - name: pro_matches
+        description: "High-level history of professional matches"
+      - name: match_details
+        description: "Full JSON replay data including picks, bans, and items"
