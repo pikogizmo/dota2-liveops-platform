@@ -39,3 +39,17 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: uv run etl_match_details.py
+
+      - name: Generate Meta Chart
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: uv run viz_meta.py
+
+      - name: Commit and Push Chart
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add meta_snapshot.png
+          # The '|| exit 0' allows the step to pass if there are no changes (e.g., chart looks exactly the same)
+          git commit -m "chore(viz): update meta snapshot [skip ci]" || exit 0
+          git push
