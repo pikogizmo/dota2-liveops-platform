@@ -25,7 +25,7 @@ def generate_meta_chart():
     JOIN raw.heroes h ON h.hero_id = pb.hero_id
     WHERE pb.is_pick IS TRUE
     GROUP BY h.hero_name
-    HAVING count(*) > 5  -- Only show heroes with decent sample size
+    HAVING count(*) > 12  -- Only show heroes with decent sample size
     ORDER BY total_picks DESC;
     """
     
