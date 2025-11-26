@@ -34,3 +34,8 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: uv run etl_matches.py
+      
+      - name: Run Match Details ETL
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: uv run etl_match_details.py
