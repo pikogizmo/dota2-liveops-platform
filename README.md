@@ -21,6 +21,9 @@ A serverless, automated data pipeline that monitors the global Dota 2 profession
 
 ## 🚀 Live Data Status
 *(This section is updated automatically by the pipeline)*
+## 📊 Current Meta Snapshot
+![Meta Analysis](meta_snapshot.png)
+*(Updated automatically every hour)*
 * **Source:** OpenDota Public API
 * **Update Frequency:** Every 60 minutes
 * **Storage Strategy:** Raw JSONB retention for full replay parsing.
