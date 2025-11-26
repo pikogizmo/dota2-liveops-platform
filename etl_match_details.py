@@ -10,7 +10,7 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 API_BASE_URL = "https://api.opendota.com/api/matches"
 DELAY_SECONDS = 1.0  # Polite delay to avoid rate limits
-BATCH_SIZE = 20      # How many matches to process per run
+BATCH_SIZE = 60      # How many matches to process per run
 
 def ingest_match_details():
     print("🚀 [Details ETL] Starting job...")
