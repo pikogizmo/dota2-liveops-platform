@@ -23,7 +23,11 @@ A serverless, automated data pipeline that monitors the global Dota 2 profession
 *(This section is updated automatically by the pipeline)*
 ## 📊 Current Meta Snapshot
 ![Meta Analysis](meta_snapshot.png)
-*(Updated automatically every hour)*
+*(Static chart displays Top 20 Most Popular + Top 5 Highest Win Rate heroes to avoid clutter. Updated automatically every hour)*
+
+> [!TIP]
+> **Want to explore the data?**
+> Download the [Interactive HTML Report](meta_snapshot.html) to zoom in and see details for every hero.
 * **Source:** OpenDota Public API
 * **Update Frequency:** Every 60 minutes
 * **Storage Strategy:** Raw JSONB retention for full replay parsing.
