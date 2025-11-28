@@ -30,7 +30,7 @@ def generate_meta_chart():
     date_query = """
     SELECT min(match_date) as start_date, max(match_date) as end_date 
     FROM analytics.picks_bans 
-    WHERE match_date >= %(start_timestamp)s
+    WHERE match_date >= to_timestamp(%(start_timestamp)s)
     """
     with engine.connect() as conn:
         date_df = pd.read_sql(date_query, conn, params={"start_timestamp": START_TIMESTAMP})
@@ -52,7 +52,7 @@ def generate_meta_chart():
     FROM analytics.picks_bans pb
     JOIN raw.heroes h ON h.hero_id = pb.hero_id
     WHERE pb.is_pick IS TRUE
-    AND pb.match_date >= %(start_timestamp)s
+    AND pb.match_date >= to_timestamp(%(start_timestamp)s)
     GROUP BY h.hero_name
     HAVING count(*) > 12  -- Only show heroes with decent sample size
     ORDER BY total_picks DESC;
@@ -181,7 +181,7 @@ def generate_meta_chart():
     JOIN raw.heroes h2 ON h2.hero_id = pb2.hero_id
     WHERE pb1.is_pick IS TRUE 
     AND pb2.is_pick IS TRUE
-    AND pb1.match_date >= %(start_timestamp)s
+    AND pb1.match_date >= to_timestamp(%(start_timestamp)s)
     AND pb1.hero_id < pb2.hero_id -- Avoid duplicates (A-B vs B-A) and self-joins
     GROUP BY 1
     HAVING count(*) >= 15

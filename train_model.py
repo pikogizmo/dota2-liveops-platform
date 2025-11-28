@@ -29,7 +29,7 @@ def train_and_predict():
     FROM analytics.match_summary m
     JOIN analytics.picks_bans pb ON m.match_id = pb.match_id
     WHERE pb.is_pick IS TRUE
-    AND m.match_date >= %(start_timestamp)s;
+    AND m.match_date >= to_timestamp(%(start_timestamp)s);
     """
     
     with engine.connect() as conn:
