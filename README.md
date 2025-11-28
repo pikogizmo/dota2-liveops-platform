@@ -26,7 +26,7 @@ The pipeline automatically generates and deploys an interactive dashboard to Git
 > [!TIP]
 > **Explore the Data**
 > [**View Live Dashboard**](https://pikogizmo.github.io/dota2-liveops-platform/)
-> *Real-time win rates, pick counts, and meta trends.*
+> *Real-time win rates, pick counts, meta trends, and hero synergies.*
 
 ![Meta Analysis](meta_snapshot.png)
 *(Static snapshot. Visit the live dashboard for interactive data.)*

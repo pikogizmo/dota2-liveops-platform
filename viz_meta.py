@@ -125,8 +125,7 @@ def generate_meta_chart():
     fig_bar.update_layout(height=500, showlegend=False)
     fig_bar.update_yaxes(range=[0, 100])
 
-    # 3. Model Weights Chart (Horizontal Bar)
-    print("   ... Generating Model Weights Chart")
+    # Model Weights Chart (Horizontal Bar)
     weights_file = "draft_weights.csv"
     fig_weights_html = ""
     
@@ -157,6 +156,51 @@ def generate_meta_chart():
     else:
         print("⚠️ draft_weights.csv not found. Skipping model chart.")
 
+    # Synergy Chart (Top 15 Combos)
+    synergy_query = """
+    SELECT 
+        h1.hero_name || ' + ' || h2.hero_name as combo_name,
+        count(*) as matches_played,
+        round(avg(case when pb1.is_winner then 1 else 0 end) * 100, 2) as win_rate
+    FROM analytics.picks_bans pb1
+    JOIN analytics.picks_bans pb2 ON pb1.match_id = pb2.match_id AND pb1.team = pb2.team
+    JOIN raw.heroes h1 ON h1.hero_id = pb1.hero_id
+    JOIN raw.heroes h2 ON h2.hero_id = pb2.hero_id
+    WHERE pb1.is_pick IS TRUE 
+    AND pb2.is_pick IS TRUE
+    AND pb1.hero_id < pb2.hero_id -- Avoid duplicates (A-B vs B-A) and self-joins
+    GROUP BY 1
+    HAVING count(*) >= 15
+    ORDER BY win_rate DESC
+    LIMIT 15;
+    """
+    
+    fig_synergy_html = ""
+    try:
+        with engine.connect() as conn:
+            synergy_df = pd.read_sql(synergy_query, conn)
+            
+        if not synergy_df.empty:
+            fig_synergy = px.bar(
+                synergy_df,
+                x="win_rate",
+                y="combo_name",
+                orientation='h',
+                hover_data=["matches_played"],
+                color="win_rate",
+                color_continuous_scale="RdYlGn",
+                title=f"<b>Top 15 Best Hero Combos (Synergy)</b> {date_label}",
+                labels={"win_rate": "Win Rate %", "combo_name": "Hero Duo", "matches_played": "Matches"}
+            )
+            fig_synergy.update_layout(height=600, showlegend=False)
+            fig_synergy.update_yaxes(autorange="reversed") # Highest win rate on top
+            fig_synergy_html = f'<div class="chart-container">{fig_synergy.to_html(full_html=False, include_plotlyjs=False)}</div>'
+        else:
+             print("⚠️ Not enough synergy data found.")
+
+    except Exception as e:
+        print(f"⚠️ Failed to generate synergy chart: {e}")
+
     # Combine into HTML
     output_file_html = "index.html"
     last_updated = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -183,6 +227,7 @@ def generate_meta_chart():
                 {fig_bar.to_html(full_html=False, include_plotlyjs=False)} 
             </div>
             {fig_weights_html}
+            {fig_synergy_html}
         </body>
         </html>
         """)
