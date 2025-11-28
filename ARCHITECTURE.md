@@ -57,6 +57,11 @@
 * **Solution:** The model trains only on matches from the last 30 days (`WHERE match_date > NOW() - INTERVAL '30 days'`).
 * **Where:** `train_model.py`.
 
+### Synergy Analysis
+* **Problem:** Individual hero win rates don't capture team composition effects.
+* **Solution:** Self-join on `picks_bans` to find hero pairs with high win rates (>15 matches).
+* **Where:** `viz_meta.py`.
+
 ## 5. Troubleshooting Cheat Sheet
 
 **Scenario: "Connection Refused"**

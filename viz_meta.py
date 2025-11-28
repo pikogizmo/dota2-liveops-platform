@@ -125,8 +125,7 @@ def generate_meta_chart():
     fig_bar.update_layout(height=500, showlegend=False)
     fig_bar.update_yaxes(range=[0, 100])
 
-    # 3. Model Weights Chart (Horizontal Bar)
-    print("   ... Generating Model Weights Chart")
+    # Model Weights Chart (Horizontal Bar)
     weights_file = "draft_weights.csv"
     fig_weights_html = ""
     
@@ -157,8 +156,7 @@ def generate_meta_chart():
     else:
         print("⚠️ draft_weights.csv not found. Skipping model chart.")
 
-    # 4. Synergy Chart (Top 15 Combos)
-    print("   ... Generating Synergy Chart")
+    # Synergy Chart (Top 15 Combos)
     synergy_query = """
     SELECT 
         h1.hero_name || ' + ' || h2.hero_name as combo_name,
