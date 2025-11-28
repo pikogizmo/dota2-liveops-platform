@@ -2,10 +2,9 @@ name: Hourly Data Pipeline
 
 on:
   schedule:
-    # Run at minute 15 of every hour (e.g., 14:15, 15:15...)
-    # We avoid minute 0 because everyone else schedules then, causing lag.
+    # Run at minute 15 of every hour
     - cron: '15 * * * *'
-  # Allow manual trigger for testing
+  # Manual trigger
   workflow_dispatch:
 
 permissions:
@@ -30,7 +29,7 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Run Hero ETL (Just to be safe/update daily)
+      - name: Run Hero ETL
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: uv run etl_heroes.py
@@ -55,7 +54,6 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add meta_snapshot.png
-          # The '|| exit 0' allows the step to pass if there are no changes (e.g., chart looks exactly the same)
           git commit -m "chore(viz): update meta snapshot [skip ci]" || exit 0
           git push
 
