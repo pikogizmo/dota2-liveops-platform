@@ -27,7 +27,7 @@ A serverless, automated data pipeline that monitors the global Dota 2 profession
 
 > [!TIP]
 > **Want to explore the data?**
-> Download the [Interactive HTML Report](meta_snapshot.html) to zoom in and see details for every hero.
+> View the [Live Interactive Dashboard](https://pikogizmo.github.io/dota2-liveops-platform/) to zoom in and see details for every hero.
 * **Source:** OpenDota Public API
 * **Update Frequency:** Every 60 minutes
 * **Storage Strategy:** Raw JSONB retention for full replay parsing.
