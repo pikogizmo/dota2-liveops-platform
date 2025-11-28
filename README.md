@@ -13,23 +13,27 @@ A serverless, automated data pipeline that monitors the global Dota 2 profession
 * **Compute:** Python 3.11 + `uv` (Containerized)
 * **Storage:** Neon PostgreSQL (Serverless)
 * **Ingestion:** OpenDota API (Raw Layer)
+* **ML:** Scikit-Learn (Logistic Regression)
 
 **Data Flow:**
 1.  **Ingest:** Python scripts fetch the last 100 pro matches every hour.
 2.  **Load:** Data is Upserted (Idempotent) into the `raw.pro_matches` table in Postgres.
 3.  **Monitor:** GitHub Actions provides logging and failure alerts.
 
-## 🚀 Live Data Status
-*(This section is updated automatically by the pipeline)*
-## 📊 Current Meta Snapshot
-![Meta Analysis](meta_snapshot.png)
-*(Static chart displays Top 20 Most Popular + Top 5 Highest Win Rate heroes to avoid clutter. Updated automatically every hour)*
+## 📊 Live Meta Dashboard
+The pipeline automatically generates and deploys an interactive dashboard to GitHub Pages.
 
 > [!TIP]
-> **Want to explore the data?**
-> View the [Live Interactive Dashboard](https://pikogizmo.github.io/dota2-liveops-platform/) to zoom in and see details for every hero.
+> **Explore the Data**
+> [**View Live Dashboard**](https://pikogizmo.github.io/dota2-liveops-platform/)
+> *Real-time win rates, pick counts, and meta trends.*
+
+![Meta Analysis](meta_snapshot.png)
+*(Static snapshot. Visit the live dashboard for interactive data.)*
+
+### Data Source & Frequency
 * **Source:** OpenDota Public API
-* **Update Frequency:** Every 60 minutes
+* **Update Frequency:** Hourly
 * **Storage Strategy:** Raw JSONB retention for full replay parsing.
 
 ## 🛠️ Setup & Local Development

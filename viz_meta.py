@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from adjustText import adjust_text
 from dotenv import load_dotenv
 
-# 1. Config
+# Configuration
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -17,7 +17,7 @@ def generate_meta_chart():
     
     engine = create_engine(DATABASE_URL)
     
-    # 2. Fetch Date Range
+    # Fetch date range
     print("   ... Fetching Date Range")
     date_query = "SELECT min(match_date) as start_date, max(match_date) as end_date FROM analytics.picks_bans"
     with engine.connect() as conn:
@@ -31,7 +31,7 @@ def generate_meta_chart():
     end_date = pd.to_datetime(date_df['end_date'][0]).strftime('%b %d')
     date_label = f"({start_date} - {end_date})"
     
-    # 3. Fetch Hero Data
+    # Fetch hero data
     query = """
     SELECT 
         h.hero_name,
@@ -52,7 +52,7 @@ def generate_meta_chart():
         print("❌ Not enough data to plot yet!")
         return
 
-    # --- A. Static Plot (Optimized for README) ---
+    # Generate static plot
     print("   ... Generating Static Image")
     plt.figure(figsize=(12, 8))
     sns.set_style("darkgrid")
@@ -88,17 +88,14 @@ def generate_meta_chart():
     plt.savefig(output_file_static, dpi=300, bbox_inches='tight')
     print(f"✅ Static Chart saved to {output_file_static}")
 
-    # --- B. Interactive Report (Scatter + Bar) ---
+    # Generate interactive report
     print("   ... Generating Interactive HTML Report")
     
-    # Calculate Standard Error
-    # SE = sqrt( (p * (1 - p)) / n )
-    # p = win_rate / 100
-    # n = total_picks
+    # Calculate standard error
     df['p'] = df['win_rate'] / 100
     df['std_error'] = np.sqrt((df['p'] * (1 - df['p'])) / df['total_picks']) * 100 # Convert back to percentage
 
-    # 1. Scatter Chart
+    # Scatter Chart
     fig_scatter = px.scatter(
         df,
         x="total_picks",
@@ -112,7 +109,7 @@ def generate_meta_chart():
     )
     fig_scatter.update_layout(height=600, showlegend=False)
 
-    # 2. Bar Chart (Top 10 Win Rate)
+    # Bar Chart (Top 10 Win Rate)
     top_10_win = df.nlargest(10, 'win_rate')
     
     fig_bar = px.bar(
@@ -127,6 +124,38 @@ def generate_meta_chart():
     )
     fig_bar.update_layout(height=500, showlegend=False)
     fig_bar.update_yaxes(range=[0, 100])
+
+    # 3. Model Weights Chart (Horizontal Bar)
+    print("   ... Generating Model Weights Chart")
+    weights_file = "draft_weights.csv"
+    fig_weights_html = ""
+    
+    if os.path.exists(weights_file):
+        try:
+            weights_df = pd.read_csv(weights_file)
+            
+            # Get Top 10 and Bottom 10
+            top_10 = weights_df.head(10)
+            bottom_10 = weights_df.tail(10)
+            combined_weights = pd.concat([top_10, bottom_10]).sort_values(by="coefficient")
+            
+            fig_weights = px.bar(
+                combined_weights,
+                x="coefficient",
+                y="hero_name",
+                orientation='h',
+                color="coefficient",
+                color_continuous_scale="RdYlGn",
+                title="<b>Meta Impact: Hero Draft Weights (Last 30 Days)</b>",
+                labels={"coefficient": "Draft Impact (Log Odds)", "hero_name": "Hero"}
+            )
+            fig_weights.update_layout(height=600, showlegend=False)
+            fig_weights_html = f'<div class="chart-container">{fig_weights.to_html(full_html=False, include_plotlyjs=False)}</div>'
+            
+        except Exception as e:
+            print(f"⚠️ Failed to generate weights chart: {e}")
+    else:
+        print("⚠️ draft_weights.csv not found. Skipping model chart.")
 
     # Combine into HTML
     output_file_html = "index.html"
@@ -153,6 +182,7 @@ def generate_meta_chart():
             <div class="chart-container">
                 {fig_bar.to_html(full_html=False, include_plotlyjs=False)} 
             </div>
+            {fig_weights_html}
         </body>
         </html>
         """)
