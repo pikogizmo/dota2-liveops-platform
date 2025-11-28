@@ -84,7 +84,6 @@ def generate_meta_chart():
         df,
         x="total_picks",
         y="win_rate",
-        text="hero_name",
         hover_name="hero_name",
         size="total_picks",
         color="win_rate",
@@ -94,7 +93,6 @@ def generate_meta_chart():
     )
     
     # Improve layout
-    fig.update_traces(textposition='top center')
     fig.update_layout(
         showlegend=False,
         height=800
