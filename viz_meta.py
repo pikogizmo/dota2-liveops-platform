@@ -14,9 +14,23 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 def generate_meta_chart():
     print("🎨 Generating Meta Snapshot...")
     
-    # 2. Fetch Data (The same logic as your SQL View)
     engine = create_engine(DATABASE_URL)
     
+    # 2. Fetch Date Range
+    print("   ... Fetching Date Range")
+    date_query = "SELECT min(match_date) as start_date, max(match_date) as end_date FROM analytics.picks_bans"
+    with engine.connect() as conn:
+        date_df = pd.read_sql(date_query, conn)
+    
+    if date_df['start_date'][0] is None:
+        print("❌ No data found in database!")
+        return
+
+    start_date = pd.to_datetime(date_df['start_date'][0]).strftime('%b %d')
+    end_date = pd.to_datetime(date_df['end_date'][0]).strftime('%b %d')
+    date_label = f"({start_date} - {end_date})"
+    
+    # 3. Fetch Hero Data
     query = """
     SELECT 
         h.hero_name,
@@ -38,11 +52,10 @@ def generate_meta_chart():
         return
 
     # --- A. Static Plot (Optimized for README) ---
-    print("   ... Generating Static Image (Cleaned)")
+    print("   ... Generating Static Image")
     plt.figure(figsize=(12, 8))
     sns.set_style("darkgrid")
     
-    # Scatter Plot
     sns.scatterplot(
         data=df, 
         x="total_picks", 
@@ -53,8 +66,6 @@ def generate_meta_chart():
         alpha=0.7
     )
     
-    # Label Strategy: Top 20 Popular + Top 5 Highest Win Rate
-    # This avoids the "collision" mess in the static image
     top_picks = df.nlargest(20, 'total_picks')['hero_name'].tolist()
     top_wins = df.nlargest(5, 'win_rate')['hero_name'].tolist()
     heroes_to_label = set(top_picks + top_wins)
@@ -66,21 +77,21 @@ def generate_meta_chart():
     
     adjust_text(texts, arrowprops=dict(arrowstyle='-', color='gray', alpha=0.5))
 
-    # Decoration
-    plt.title(f"Dota 2 Pro Meta: Win Rate vs. Popularity (n={len(df)} heroes)", fontsize=16, fontweight='bold')
+    plt.title(f"Dota 2 Pro Meta: Win Rate vs. Popularity {date_label}\n(n={len(df)} heroes)", fontsize=16, fontweight='bold')
     plt.xlabel("Total Picks (Popularity)", fontsize=12)
     plt.ylabel("Win Rate %", fontsize=12)
     plt.axhline(50, color='red', linestyle='--', alpha=0.5, label="50% Win Rate")
     plt.legend()
     
-    # Save Static
     output_file_static = "meta_snapshot.png"
     plt.savefig(output_file_static, dpi=300, bbox_inches='tight')
     print(f"✅ Static Chart saved to {output_file_static}")
 
-    # --- B. Interactive Plot (Full Detail) ---
-    print("   ... Generating Interactive HTML")
-    fig = px.scatter(
+    # --- B. Interactive Report (Scatter + Bar) ---
+    print("   ... Generating Interactive HTML Report")
+    
+    # 1. Scatter Chart
+    fig_scatter = px.scatter(
         df,
         x="total_picks",
         y="win_rate",
@@ -88,19 +99,53 @@ def generate_meta_chart():
         size="total_picks",
         color="win_rate",
         color_continuous_scale="RdYlGn",
-        title=f"Dota 2 Pro Meta (Interactive) - n={len(df)} heroes",
+        title=f"<b>Meta Scatter: Win Rate vs. Popularity</b> {date_label}",
         labels={"total_picks": "Total Picks", "win_rate": "Win Rate %"}
     )
+    fig_scatter.update_layout(height=600, showlegend=False)
+
+    # 2. Bar Chart (Top 10 Win Rate)
+    top_10_win = df.nlargest(10, 'win_rate')
     
-    # Improve layout
-    fig.update_layout(
-        showlegend=False,
-        height=800
+    fig_bar = px.bar(
+        top_10_win,
+        x="hero_name",
+        y="win_rate",
+        hover_data=["total_picks"],
+        color="win_rate",
+        color_continuous_scale="RdYlGn",
+        title=f"<b>Top 10 Highest Win Rate Heroes</b> {date_label}",
+        labels={"hero_name": "Hero", "win_rate": "Win Rate %", "total_picks": "Total Picks"}
     )
-    
+    fig_bar.update_layout(height=500, showlegend=False)
+    fig_bar.update_yaxes(range=[0, 100])
+
+    # Combine into HTML
     output_file_html = "meta_snapshot.html"
-    fig.write_html(output_file_html)
-    print(f"✅ Interactive Chart saved to {output_file_html}")
+    with open(output_file_html, 'w') as f:
+        f.write(f"""
+        <html>
+        <head>
+            <title>Dota 2 Meta Report {date_label}</title>
+            <style>
+                body {{ font-family: sans-serif; margin: 20px; background-color: #f4f4f9; }}
+                .chart-container {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 30px; }}
+                h1 {{ text-align: center; color: #333; }}
+            </style>
+        </head>
+        <body>
+            <h1>🛡️ Dota 2 Meta Report {date_label}</h1>
+            <div class="chart-container">
+                {fig_scatter.to_html(full_html=False, include_plotlyjs='cdn')}
+            </div>
+            <div class="chart-container">
+                {fig_bar.to_html(full_html=False, include_plotlyjs=False)} 
+            </div>
+        </body>
+        </html>
+        """)
+        
+    print(f"✅ Interactive Report saved to {output_file_html}")
 
 if __name__ == "__main__":
     generate_meta_chart()
