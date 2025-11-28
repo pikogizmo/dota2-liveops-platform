@@ -8,6 +8,11 @@ on:
   # Allow manual trigger for testing
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   run-etl:
     runs-on: ubuntu-latest
@@ -53,3 +58,16 @@ jobs:
           # The '|| exit 0' allows the step to pass if there are no changes (e.g., chart looks exactly the same)
           git commit -m "chore(viz): update meta snapshot [skip ci]" || exit 0
           git push
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./
+          publish_branch: gh-pages
+          keep_files: true
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: 'deploy: update index.html [skip ci]'
+          enable_jekyll: false
+          exclude_assets: '.github, .venv, .vscode, .git, .gitignore, .python-version, uv.lock, pyproject.toml, *.py, *.md, sql, dbt_analytics'

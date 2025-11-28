@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
@@ -90,17 +91,25 @@ def generate_meta_chart():
     # --- B. Interactive Report (Scatter + Bar) ---
     print("   ... Generating Interactive HTML Report")
     
+    # Calculate Standard Error
+    # SE = sqrt( (p * (1 - p)) / n )
+    # p = win_rate / 100
+    # n = total_picks
+    df['p'] = df['win_rate'] / 100
+    df['std_error'] = np.sqrt((df['p'] * (1 - df['p'])) / df['total_picks']) * 100 # Convert back to percentage
+
     # 1. Scatter Chart
     fig_scatter = px.scatter(
         df,
         x="total_picks",
         y="win_rate",
+        error_y="std_error", # Add Error Bars
         hover_name="hero_name",
         size="total_picks",
         color="win_rate",
         color_continuous_scale="RdYlGn",
         title=f"<b>Meta Scatter: Win Rate vs. Popularity</b> {date_label}",
-        labels={"total_picks": "Total Picks", "win_rate": "Win Rate %"}
+        labels={"total_picks": "Total Picks", "win_rate": "Win Rate %", "std_error": "Standard Error"}
     )
     fig_scatter.update_layout(height=600, showlegend=False)
 
@@ -121,20 +130,24 @@ def generate_meta_chart():
     fig_bar.update_yaxes(range=[0, 100])
 
     # Combine into HTML
-    output_file_html = "meta_snapshot.html"
+    output_file_html = "index.html"
+    last_updated = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+    
     with open(output_file_html, 'w') as f:
         f.write(f"""
         <html>
         <head>
-            <title>Dota 2 Meta Report {date_label}</title>
+            <title>Dota 2 Meta Report {date_label} - Last Updated: {last_updated}</title>
             <style>
                 body {{ font-family: sans-serif; margin: 20px; background-color: #f4f4f9; }}
                 .chart-container {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 30px; }}
                 h1 {{ text-align: center; color: #333; }}
+                .timestamp {{ text-align: center; color: #666; font-size: 0.9em; margin-bottom: 20px; }}
             </style>
         </head>
         <body>
             <h1>🛡️ Dota 2 Meta Report {date_label}</h1>
+            <div class="timestamp">Last Updated: {last_updated}</div>
             <div class="chart-container">
                 {fig_scatter.to_html(full_html=False, include_plotlyjs='cdn')}
             </div>
