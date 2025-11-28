@@ -103,13 +103,12 @@ def generate_meta_chart():
         df,
         x="total_picks",
         y="win_rate",
-        error_y="std_error", # Add Error Bars
         hover_name="hero_name",
         size="total_picks",
         color="win_rate",
         color_continuous_scale="RdYlGn",
         title=f"<b>Meta Scatter: Win Rate vs. Popularity</b> {date_label}",
-        labels={"total_picks": "Total Picks", "win_rate": "Win Rate %", "std_error": "Standard Error"}
+        labels={"total_picks": "Total Picks", "win_rate": "Win Rate %"}
     )
     fig_scatter.update_layout(height=600, showlegend=False)
 
