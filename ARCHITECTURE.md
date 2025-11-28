@@ -1,21 +1,21 @@
 # 🏗️ System Architecture & Engineering Runbook
 
-## 1. The High-Level Stack
+## 1. High-Level Stack
 * **Compute (Local):** WSL2 (Ubuntu) + Python 3.11 + `uv` (Package Manager).
 * **Compute (Cloud):** GitHub Actions (Serverless Runners).
 * **Storage:** Neon PostgreSQL (Serverless, Autoscaling).
 * **Orchestration:** GitHub Actions Cron (`.github/workflows/hourly_etl.yml`).
 * **Transformation:** dbt Core (`dbt_analytics/`).
+* **Presentation:** GitHub Pages (Static Hosting).
 
 ## 2. Data Flow Diagram
-[API: OpenDota] -> [Python ETL Scripts] -> [Neon DB (Raw Schema)] -> [dbt (Staging Schema)] -> [dbt (Tests)] -> [Viz/ML Scripts] -> [GitHub Repo (README/Assets)]
+[API: OpenDota] -> [Python ETL Scripts] -> [Neon DB (Raw Schema)] -> [dbt (Staging Schema)] -> [Viz Scripts] -> [GitHub Pages (Dashboard)]
 
-## 3. The "Secret" Configuration Map
-This is the most confusing part. Here is how the system authenticates.
+## 3. Configuration & Authentication
 
-### A. Local Development (Your Laptop)
+### A. Local Development
 * **File:** `.env` (in project root).
-* **Status:** Gitignored (NEVER commit this).
+* **Status:** Gitignored.
 * **Content:**
     ```ini
     DATABASE_URL="postgresql://neondb_owner:..."
@@ -23,13 +23,12 @@ This is the most confusing part. Here is how the system authenticates.
     DBT_USER="..."
     DBT_PASSWORD="..."
     ```
-* **How Python reads it:** `load_dotenv()` loads it into memory.
-* **How dbt reads it:** You must run `export $(grep -v '^#' .env | xargs)` before running dbt debug commands, OR rely on `profiles.yml` logic.
+* **Usage:** `load_dotenv()` loads variables into memory for Python scripts. For dbt, variables must be exported to the environment.
 
 ### B. Production (GitHub Actions)
-* **Location:** GitHub Repo -> Settings -> Secrets and variables -> Actions.
+* **Location:** GitHub Repo Secrets.
 * **Secret Name:** `DATABASE_URL`.
-* **How it works:** The YAML file injects this secret into the runner environment:
+* **Usage:** Injected into the runner environment via workflow configuration:
     ```yaml
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
