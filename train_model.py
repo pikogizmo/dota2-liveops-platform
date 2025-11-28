@@ -6,9 +6,15 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 from dotenv import load_dotenv
+import tomllib
 
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+with open("patch_config.toml", "rb") as f:
+    config = tomllib.load(f)
+
+START_TIMESTAMP = config["current_meta"]["start_timestamp"]
 
 def train_and_predict():
     """
@@ -23,14 +29,14 @@ def train_and_predict():
     FROM analytics.match_summary m
     JOIN analytics.picks_bans pb ON m.match_id = pb.match_id
     WHERE pb.is_pick IS TRUE
-    AND m.match_date > NOW() - INTERVAL '30 days';
+    AND m.start_time >= %(start_timestamp)s;
     """
     
     with engine.connect() as conn:
-        raw_df = pd.read_sql(query, conn)
+        raw_df = pd.read_sql(query, conn, params={"start_timestamp": START_TIMESTAMP})
 
     if raw_df.empty:
-        print("❌ Insufficient training data (Last 30 Days).")
+        print("❌ Insufficient training data (Current Patch).")
         return
 
     # Pivot data for one-hot encoding
