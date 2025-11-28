@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: stg_match_summary
+    description: "One row per match with high-level outcome stats"
+    columns:
+      - name: match_id
+        tests:
+          - unique
+          - not_null
+      - name: radiant_win
+        tests:
+          - not_null
+
+  - name: stg_picks_bans
+    description: "One row per draft event (pick or ban)"
+    columns:
+      - name: match_id
+        tests:
+          - not_null
+      - name: hero_id
+        tests:
+          - not_null
+      - name: team
+        tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
