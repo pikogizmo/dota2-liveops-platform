@@ -125,6 +125,38 @@ def generate_meta_chart():
     fig_bar.update_layout(height=500, showlegend=False)
     fig_bar.update_yaxes(range=[0, 100])
 
+    # 3. Model Weights Chart (Horizontal Bar)
+    print("   ... Generating Model Weights Chart")
+    weights_file = "draft_weights.csv"
+    fig_weights_html = ""
+    
+    if os.path.exists(weights_file):
+        try:
+            weights_df = pd.read_csv(weights_file)
+            
+            # Get Top 10 and Bottom 10
+            top_10 = weights_df.head(10)
+            bottom_10 = weights_df.tail(10)
+            combined_weights = pd.concat([top_10, bottom_10]).sort_values(by="coefficient")
+            
+            fig_weights = px.bar(
+                combined_weights,
+                x="coefficient",
+                y="hero_name",
+                orientation='h',
+                color="coefficient",
+                color_continuous_scale="RdYlGn",
+                title="<b>Meta Impact: Hero Draft Weights (Last 30 Days)</b>",
+                labels={"coefficient": "Draft Impact (Log Odds)", "hero_name": "Hero"}
+            )
+            fig_weights.update_layout(height=600, showlegend=False)
+            fig_weights_html = f'<div class="chart-container">{fig_weights.to_html(full_html=False, include_plotlyjs=False)}</div>'
+            
+        except Exception as e:
+            print(f"⚠️ Failed to generate weights chart: {e}")
+    else:
+        print("⚠️ draft_weights.csv not found. Skipping model chart.")
+
     # Combine into HTML
     output_file_html = "index.html"
     last_updated = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -150,6 +182,7 @@ def generate_meta_chart():
             <div class="chart-container">
                 {fig_bar.to_html(full_html=False, include_plotlyjs=False)} 
             </div>
+            {fig_weights_html}
         </body>
         </html>
         """)
