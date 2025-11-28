@@ -4,7 +4,7 @@
 ![Python](https://img.shields.io/badge/Python-3.11-blue?style=flat-square)
 ![Database](https://img.shields.io/badge/Postgres-Neon%20Serverless-00bfa5?style=flat-square)
 
-A serverless, automated data pipeline that monitors the global Dota 2 professional meta in real-time. Built to demonstrate **modern data engineering patterns** (ELT, Idempotency, Infrastructure-as-Code).
+A serverless, automated data pipeline that monitors the global Dota 2 professional meta in real-time. It uses a modern ELT stack to fetch, store, and analyze match data, providing live insights into the current patch meta.
 
 ## 🏗️ Architecture
 

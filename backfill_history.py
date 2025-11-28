@@ -40,8 +40,6 @@ def save_matches(engine, matches):
     if not matches:
         return 0
         
-    # Postgres upsert syntax for the actual schema
-    # Schema: match_id, start_time, raw_data, ingested_at
     upsert_query = text("""
         INSERT INTO raw.pro_matches (
             match_id, start_time, raw_data
@@ -51,13 +49,12 @@ def save_matches(engine, matches):
         ON CONFLICT (match_id) DO NOTHING;
     """)
     
-    # Prepare data for bulk insert
     params = []
     for match in matches:
         params.append({
             'match_id': match.get('match_id'),
             'start_time': match.get('start_time'),
-            'raw_data': json.dumps(match) # Store the full JSON
+            'raw_data': json.dumps(match)
         })
 
     count = 0
@@ -125,10 +122,6 @@ def main():
                 valid_matches_found.append(match)
             else:
                 stop_loop = True
-                # Check if we should really stop. Sometimes matches are slightly out of order.
-                # But usually safe to stop if we are significantly past.
-                # For strictness, if we see a match WAY before, we stop.
-                # But the user instruction was "stop the loop immediately".
                 break
         
         if batch_valid_matches:
@@ -154,23 +147,6 @@ def main():
             
             # Check which ones are missing
             match_ids = [m['match_id'] for m in valid_matches_found]
-            missing_ids = []
-            
-            # We can check in batches or one by one. One by one is safer for now.
-            # Or query DB for existing IDs.
-            with engine.connect() as conn:
-                # This might be slow for many matches, but fine for a backfill script
-                existing_query = text("SELECT match_id FROM raw.match_details WHERE match_id = ANY(:ids)")
-                # SQLAlchemy doesn't support ANY(:ids) directly with list easily in all dialects, 
-                # but Postgres does.
-                # Alternatively:
-                try:
-                    # Fetch all existing IDs for the set we found
-                    # Assuming match_ids list isn't huge (thousands). If it is, we should chunk.
-                    # For now, let's just check one by one in the loop to be simple and robust.
-                    pass
-                except Exception:
-                    pass
 
             for match in valid_matches_found:
                 match_id = match['match_id']
@@ -191,7 +167,7 @@ def main():
                 if details:
                     save_match_details(engine, details)
                 
-                time.sleep(1.5) # Rate limiting
+                time.sleep(1.5)
                 
     print("Done.")
 
