@@ -13,6 +13,7 @@ A serverless, automated data pipeline that monitors the global Dota 2 profession
 * **Compute:** Python 3.11 + `uv` (Containerized)
 * **Storage:** Neon PostgreSQL (Serverless)
 * **Ingestion:** OpenDota API (Raw Layer)
+* **ML:** Scikit-Learn (Logistic Regression)
 
 **Data Flow:**
 1.  **Ingest:** Python scripts fetch the last 100 pro matches every hour.

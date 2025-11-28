@@ -6,10 +6,11 @@
 * **Storage:** Neon PostgreSQL (Serverless, Autoscaling).
 * **Orchestration:** GitHub Actions Cron (`.github/workflows/hourly_etl.yml`).
 * **Transformation:** dbt Core (`dbt_analytics/`).
+* **Machine Learning:** Scikit-Learn (Logistic Regression).
 * **Presentation:** GitHub Pages (Static Hosting).
 
 ## 2. Data Flow Diagram
-[API: OpenDota] -> [Python ETL Scripts] -> [Neon DB (Raw Schema)] -> [dbt (Staging Schema)] -> [Viz Scripts] -> [GitHub Pages (Dashboard)]
+[API: OpenDota] -> [Python ETL Scripts] -> [Neon DB (Raw Schema)] -> [dbt (Staging Schema)] -> [ML Training] -> [Viz Scripts] -> [GitHub Pages (Dashboard)]
 
 ## 3. Configuration & Authentication
 
@@ -50,6 +51,11 @@
 * **Problem:** How do we track which matches need detailed parsing?
 * **Solution:** We select matches present in `pro_matches` but NULL in `match_details`.
 * **Where:** `etl_match_details.py`.
+
+### Rolling Window Training
+* **Problem:** Meta shifts constantly; historical data becomes stale.
+* **Solution:** The model trains only on matches from the last 30 days (`WHERE match_date > NOW() - INTERVAL '30 days'`).
+* **Where:** `train_model.py`.
 
 ## 5. Troubleshooting Cheat Sheet
 
