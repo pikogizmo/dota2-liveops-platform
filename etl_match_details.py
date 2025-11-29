@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+OPENDOTA_API_KEY = os.getenv("OPENDOTA_API_KEY")
 API_BASE_URL = "https://api.opendota.com/api/matches"
 DELAY_SECONDS = 1.2
 BATCH_SIZE = 60
@@ -53,7 +54,8 @@ def ingest_match_details():
         try:
             print(f"   -> Processing {match_id}...", end=" ", flush=True)
             
-            response = requests.get(f"{API_BASE_URL}/{match_id}")
+            params = {"api_key": OPENDOTA_API_KEY} if OPENDOTA_API_KEY else {}
+            response = requests.get(f"{API_BASE_URL}/{match_id}", params=params)
             
             if response.status_code == 429:
                 print("⚠️ Rate limit reached. Aborting batch.")

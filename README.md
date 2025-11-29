@@ -51,6 +51,7 @@ uv sync
 # 3. Configure Secrets
 # Create a .env file with your Neon Credentials:
 # DATABASE_URL="postgresql://user:pass@ep-xyz.neon.tech/neondb?sslmode=require"
+# OPENDOTA_API_KEY="your-api-key-here"
 
 # 4. Run Pipelines Manually
 uv run etl_heroes.py

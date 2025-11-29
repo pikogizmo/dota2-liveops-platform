@@ -6,12 +6,14 @@ import time
 import requests
 import os
 import json
+import concurrent.futures
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 
 # Configuration
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
+OPENDOTA_API_KEY = os.getenv("OPENDOTA_API_KEY")
 
 # Constants
 PATCH_START_TIME = 1759363200  # Oct 2, 2025 UTC - the start of 7.39e
@@ -22,19 +24,39 @@ def get_db_engine():
         raise ValueError("DATABASE_URL not found in environment variables")
     return create_engine(DATABASE_URL)
 
+def make_request_with_retry(url, params=None, max_retries=3):
+    if params is None:
+        params = {}
+    if OPENDOTA_API_KEY:
+        params['api_key'] = OPENDOTA_API_KEY
+        
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, params=params)
+            
+            if response.status_code == 429:
+                wait_time = 60 * (2 ** attempt) # 60s, 120s, 240s
+                print(f"⚠️ Rate limit hit (429). Waiting {wait_time}s before retry {attempt + 1}/{max_retries}...")
+                time.sleep(wait_time)
+                continue
+                
+            response.raise_for_status()
+            return response.json()
+            
+        except requests.RequestException as e:
+            print(f"Error making request: {e}")
+            return None
+            
+    print("❌ Max retries exceeded.")
+    return None
+
 def fetch_matches(less_than_match_id=None):
     url = "https://api.opendota.com/api/proMatches"
     params = {}
     if less_than_match_id:
         params['less_than_match_id'] = less_than_match_id
     
-    try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        print(f"Error fetching matches: {e}")
-        return []
+    return make_request_with_retry(url, params)
 
 def save_matches(engine, matches):
     if not matches:
@@ -69,13 +91,7 @@ def save_matches(engine, matches):
 
 def fetch_match_details(match_id):
     url = f"https://api.opendota.com/api/matches/{match_id}"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        return response.json()
-    except requests.RequestException as e:
-        print(f"Error fetching details for match {match_id}: {e}")
-        return None
+    return make_request_with_retry(url)
 
 def save_match_details(engine, match_data):
     if not match_data:
@@ -145,29 +161,47 @@ def main():
         if response == 'y':
             print("Hydrating match details...")
             
-            # Check which ones are missing
+            # Batch check for existing matches
             match_ids = [m['match_id'] for m in valid_matches_found]
-
-            for match in valid_matches_found:
-                match_id = match['match_id']
+            existing_ids = set()
+            
+            print("Checking for existing match details...")
+            chunk_size = 500
+            for i in range(0, len(match_ids), chunk_size):
+                chunk = match_ids[i:i + chunk_size]
+                if not chunk: continue
                 
-                # Check if exists
-                exists = False
                 with engine.connect() as conn:
-                    result = conn.execute(text("SELECT 1 FROM raw.match_details WHERE match_id = :match_id"), {"match_id": match_id})
-                    if result.fetchone():
-                        exists = True
+                    # Use ANY for array comparison which is cleaner in Postgres
+                    result = conn.execute(
+                        text("SELECT match_id FROM raw.match_details WHERE match_id = ANY(:ids)"), 
+                        {"ids": chunk}
+                    )
+                    existing_ids.update(row[0] for row in result)
+            
+            matches_to_fetch = [m for m in valid_matches_found if m['match_id'] not in existing_ids]
+            print(f"Found {len(matches_to_fetch)} matches missing details.")
+            
+            if not matches_to_fetch:
+                print("All matches already hydrated.")
+            else:
+                def process_match(match):
+                    match_id = match['match_id']
+                    print(f"Fetching details for {match_id}...", end=" ", flush=True)
+                    details = fetch_match_details(match_id)
+                    if details:
+                        save_match_details(engine, details)
+                        print(f"Saved {match_id}.")
+                    else:
+                        print(f"Failed {match_id}.")
+
+                # Use threading to speed up fetching
+                max_workers = 10
+                print(f"Starting concurrent fetch with {max_workers} threads...")
                 
-                if exists:
-                    print(f"Match {match_id} details already exist. Skipping.")
-                    continue
-                
-                print(f"Fetching details for {match_id}...")
-                details = fetch_match_details(match_id)
-                if details:
-                    save_match_details(engine, details)
-                
-                time.sleep(1.5)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = [executor.submit(process_match, m) for m in matches_to_fetch]
+                    concurrent.futures.wait(futures)
                 
     print("Done.")
 
