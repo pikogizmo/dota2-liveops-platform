@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 # Configuration
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
+OPENDOTA_API_KEY = os.getenv("OPENDOTA_API_KEY")
 API_URL = "https://api.opendota.com/api/heroes"
 
 def ingest_heroes():
@@ -14,7 +15,8 @@ def ingest_heroes():
 
     # Fetch heroes from API
     try:
-        response = requests.get(API_URL)
+        params = {"api_key": OPENDOTA_API_KEY} if OPENDOTA_API_KEY else {}
+        response = requests.get(API_URL, params=params)
         response.raise_for_status()
         heroes_data = response.json()
         print(f"📦 Fetched {len(heroes_data)} heroes from API.")

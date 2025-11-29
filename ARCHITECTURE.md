@@ -20,6 +20,7 @@
 * **Content:**
     ```ini
     DATABASE_URL="postgresql://neondb_owner:..."
+    OPENDOTA_API_KEY="..."
     DBT_HOST="..."
     DBT_USER="..."
     DBT_PASSWORD="..."
@@ -61,6 +62,11 @@
 * **Problem:** Individual hero win rates don't capture team composition effects.
 * **Solution:** Self-join on `picks_bans` to find hero pairs with high win rates (>15 matches).
 * **Where:** `viz_meta.py`.
+
+### Concurrent Backfill
+* **Problem:** Historical backfilling is slow due to sequential API rate limits.
+* **Solution:** `backfill_history.py` uses `ThreadPoolExecutor` (10 threads) to hydrate match details in parallel once the match list is discovered.
+* **Where:** `backfill_history.py`.
 
 ## 5. Troubleshooting Cheat Sheet
 

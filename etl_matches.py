@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+OPENDOTA_API_KEY = os.getenv("OPENDOTA_API_KEY")
 API_URL = "https://api.opendota.com/api/proMatches"
 MAX_RETRO_PAGES = 5
 
@@ -49,6 +50,8 @@ def ingest_pro_matches():
     while pages_processed < MAX_RETRO_PAGES:
         try:
             params = {'less_than_match_id': last_fetched_match_id} if last_fetched_match_id else {}
+            if OPENDOTA_API_KEY:
+                params['api_key'] = OPENDOTA_API_KEY
             
             response = requests.get(API_URL, params=params)
             response.raise_for_status()

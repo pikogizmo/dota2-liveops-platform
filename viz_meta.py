@@ -7,10 +7,18 @@ import plotly.express as px
 from sqlalchemy import create_engine
 from adjustText import adjust_text
 from dotenv import load_dotenv
+import tomllib
 
 # Configuration
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+with open("patch_config.toml", "rb") as f:
+    config = tomllib.load(f)
+
+PATCH_NAME = config["current_meta"]["patch_name"]
+START_TIMESTAMP = config["current_meta"]["start_timestamp"]
+PATCH_ID = config["current_meta"]["patch_id"]
 
 def generate_meta_chart():
     print("🎨 Generating Meta Snapshot...")
@@ -19,9 +27,13 @@ def generate_meta_chart():
     
     # Fetch date range
     print("   ... Fetching Date Range")
-    date_query = "SELECT min(match_date) as start_date, max(match_date) as end_date FROM analytics.picks_bans"
+    date_query = """
+    SELECT min(match_date) as start_date, max(match_date) as end_date 
+    FROM analytics.picks_bans 
+    WHERE match_date >= to_timestamp(%(start_timestamp)s)
+    """
     with engine.connect() as conn:
-        date_df = pd.read_sql(date_query, conn)
+        date_df = pd.read_sql(date_query, conn, params={"start_timestamp": START_TIMESTAMP})
     
     if date_df['start_date'][0] is None:
         print("❌ No data found in database!")
@@ -40,13 +52,14 @@ def generate_meta_chart():
     FROM analytics.picks_bans pb
     JOIN raw.heroes h ON h.hero_id = pb.hero_id
     WHERE pb.is_pick IS TRUE
+    AND pb.match_date >= to_timestamp(%(start_timestamp)s)
     GROUP BY h.hero_name
     HAVING count(*) > 12  -- Only show heroes with decent sample size
     ORDER BY total_picks DESC;
     """
     
     with engine.connect() as conn:
-        df = pd.read_sql(query, conn)
+        df = pd.read_sql(query, conn, params={"start_timestamp": START_TIMESTAMP})
     
     if df.empty:
         print("❌ Not enough data to plot yet!")
@@ -78,7 +91,7 @@ def generate_meta_chart():
     
     adjust_text(texts, arrowprops=dict(arrowstyle='-', color='gray', alpha=0.5))
 
-    plt.title(f"Dota 2 Pro Meta: Win Rate vs. Popularity {date_label}\n(n={len(df)} heroes)", fontsize=16, fontweight='bold')
+    plt.title(f"Dota 2 Pro Meta ({PATCH_NAME}): Win Rate vs. Popularity {date_label}\n(n={len(df)} heroes)", fontsize=16, fontweight='bold')
     plt.xlabel("Total Picks (Popularity)", fontsize=12)
     plt.ylabel("Win Rate %", fontsize=12)
     plt.axhline(50, color='red', linestyle='--', alpha=0.5, label="50% Win Rate")
@@ -104,7 +117,7 @@ def generate_meta_chart():
         size="total_picks",
         color="win_rate",
         color_continuous_scale="RdYlGn",
-        title=f"<b>Meta Scatter: Win Rate vs. Popularity</b> {date_label}",
+        title=f"<b>Meta Scatter ({PATCH_NAME}): Win Rate vs. Popularity</b> {date_label}",
         labels={"total_picks": "Total Picks", "win_rate": "Win Rate %"}
     )
     fig_scatter.update_layout(height=600, showlegend=False)
@@ -119,7 +132,7 @@ def generate_meta_chart():
         hover_data=["total_picks"],
         color="win_rate",
         color_continuous_scale="RdYlGn",
-        title=f"<b>Top 10 Highest Win Rate Heroes</b> {date_label}",
+        title=f"<b>Top 10 Highest Win Rate Heroes ({PATCH_NAME})</b> {date_label}",
         labels={"hero_name": "Hero", "win_rate": "Win Rate %", "total_picks": "Total Picks"}
     )
     fig_bar.update_layout(height=500, showlegend=False)
@@ -145,7 +158,7 @@ def generate_meta_chart():
                 orientation='h',
                 color="coefficient",
                 color_continuous_scale="RdYlGn",
-                title="<b>Meta Impact: Hero Draft Weights (Last 30 Days)</b>",
+                title=f"<b>Meta Impact: Hero Draft Weights ({PATCH_NAME})</b>",
                 labels={"coefficient": "Draft Impact (Log Odds)", "hero_name": "Hero"}
             )
             fig_weights.update_layout(height=600, showlegend=False)
@@ -168,6 +181,7 @@ def generate_meta_chart():
     JOIN raw.heroes h2 ON h2.hero_id = pb2.hero_id
     WHERE pb1.is_pick IS TRUE 
     AND pb2.is_pick IS TRUE
+    AND pb1.match_date >= to_timestamp(%(start_timestamp)s)
     AND pb1.hero_id < pb2.hero_id -- Avoid duplicates (A-B vs B-A) and self-joins
     GROUP BY 1
     HAVING count(*) >= 15
@@ -178,7 +192,7 @@ def generate_meta_chart():
     fig_synergy_html = ""
     try:
         with engine.connect() as conn:
-            synergy_df = pd.read_sql(synergy_query, conn)
+            synergy_df = pd.read_sql(synergy_query, conn, params={"start_timestamp": START_TIMESTAMP})
             
         if not synergy_df.empty:
             fig_synergy = px.bar(
@@ -209,7 +223,7 @@ def generate_meta_chart():
         f.write(f"""
         <html>
         <head>
-            <title>Dota 2 Meta Report {date_label} - Last Updated: {last_updated}</title>
+            <title>Dota 2 Meta Report ({PATCH_NAME}) {date_label} - Last Updated: {last_updated}</title>
             <style>
                 body {{ font-family: sans-serif; margin: 20px; background-color: #f4f4f9; }}
                 .chart-container {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 30px; }}
@@ -218,7 +232,7 @@ def generate_meta_chart():
             </style>
         </head>
         <body>
-            <h1>🛡️ Dota 2 Meta Report {date_label}</h1>
+            <h1>🛡️ Dota 2 Meta Report ({PATCH_NAME}) {date_label}</h1>
             <div class="timestamp">Last Updated: {last_updated}</div>
             <div class="chart-container">
                 {fig_scatter.to_html(full_html=False, include_plotlyjs='cdn')}
