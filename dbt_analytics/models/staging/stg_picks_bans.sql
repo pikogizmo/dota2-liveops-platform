@@ -16,9 +16,8 @@ picks_parsed as (
         (pb.item ->> 'hero_id')::int as hero_id,
         (pb.item ->> 'is_pick')::boolean as is_pick,
         (pb.item ->> 'order')::int as draft_order, 
-        (pb.item ->> 'team')::int as team, -- 0: Radiant, 1: Dire
+        (pb.item ->> 'team')::int as team,
         
-        -- Winner determination based on team mapping
         CASE 
             WHEN (pb.item ->> 'team')::int = 0 AND s.radiant_win IS TRUE THEN TRUE
             WHEN (pb.item ->> 'team')::int = 1 AND s.radiant_win IS FALSE THEN TRUE
@@ -27,7 +26,6 @@ picks_parsed as (
 
     from details d
     join summary s on d.match_id = s.match_id
-    -- Flatten picks_bans array
     cross join lateral jsonb_array_elements(d.raw_data -> 'picks_bans') as pb(item)
 )
 
