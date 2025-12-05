@@ -5,12 +5,10 @@ sources:
     description: "Raw data ingested from OpenDota API via Python ETL"
     database: neondb
     schema: raw
-    
-    # 1. Define what "Fresh" means
     freshness:
       warn_after: {count: 24, period: hour}
       error_after: {count: 7, period: day}
-    loaded_at_field: ingested_at # This is the column dbt checks
+    loaded_at_field: ingested_at
     
     tables:
       - name: heroes
