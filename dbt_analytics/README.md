@@ -1,15 +1,16 @@
-Welcome to your new dbt project!
+# dbt Analytics
 
-### Using the starter project
+Transformation layer for the Dota 2 LiveOps pipeline. Converts raw JSON match data into analytics-ready views.
 
-Try running the following commands:
-- dbt run
-- dbt test
+## Models
 
+- `stg_match_summary` - One row per match with outcome stats
+- `stg_picks_bans` - One row per draft event (pick/ban)
 
-### Resources:
-- Learn more about dbt [in the docs](https://docs.getdbt.com/docs/introduction)
-- Check out [Discourse](https://discourse.getdbt.com/) for commonly asked questions and answers
-- Join the [chat](https://community.getdbt.com/) on Slack for live discussions and support
-- Find [dbt events](https://events.getdbt.com) near you
-- Check out [the blog](https://blog.getdbt.com/) for the latest news on dbt's development and best practices
+## Usage
+
+```bash
+export $(grep -v '^#' .env | xargs)
+uv run dbt run --project-dir dbt_analytics
+uv run dbt test --project-dir dbt_analytics
+```

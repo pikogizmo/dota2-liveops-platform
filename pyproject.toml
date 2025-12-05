@@ -1,7 +1,7 @@
 [project]
 name = "dota2-liveops"
 version = "0.1.0"
-description = "Add your description here"
+description = "Automated data pipeline for Dota 2 pro meta analysis"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
