@@ -1,8 +1,10 @@
 import os
 import time
 import requests
+from requests.exceptions import RequestException
 from sqlalchemy import create_engine, MetaData, Table, Column, BigInteger, DateTime, func, select
 from sqlalchemy.dialects.postgresql import insert, JSONB
+from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -12,6 +14,8 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 OPENDOTA_API_KEY = os.getenv("OPENDOTA_API_KEY")
 API_URL = "https://api.opendota.com/api/proMatches"
 MAX_RETRO_PAGES = 5
+MAX_RETRIES = 3
+RETRY_BACKOFF_BASE = 2
 
 def get_db_max_match_id(engine, matches_table):
     """Retrieves the highest match_id currently stored to ensure gapless ingestion."""
@@ -20,7 +24,7 @@ def get_db_max_match_id(engine, matches_table):
             query = select(func.max(matches_table.c.match_id))
             result = conn.execute(query).scalar()
             return result if result is not None else 0
-    except Exception:
+    except SQLAlchemyError:
         return 0
 
 def ingest_pro_matches():
@@ -53,9 +57,26 @@ def ingest_pro_matches():
             if OPENDOTA_API_KEY:
                 params['api_key'] = OPENDOTA_API_KEY
             
-            response = requests.get(API_URL, params=params)
-            response.raise_for_status()
-            matches_data = response.json()
+            # Retry loop with exponential backoff for transient API failures
+            matches_data = None
+            for attempt in range(MAX_RETRIES):
+                try:
+                    response = requests.get(API_URL, params=params, timeout=30)
+                    response.raise_for_status()
+                    matches_data = response.json()
+                    break
+                except RequestException as e:
+                    if attempt < MAX_RETRIES - 1:
+                        wait_time = RETRY_BACKOFF_BASE ** (attempt + 1)
+                        print(f"   ⚠️  API request failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
+                        print(f"   ⏳ Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                    else:
+                        raise
+            
+            if matches_data is None:
+                print("❌ Failed to fetch data after all retries.")
+                break
             
             if not matches_data:
                 break
@@ -92,8 +113,14 @@ def ingest_pro_matches():
             pages_processed += 1
             time.sleep(1) # Rate limit compliance
 
-        except Exception as e:
-            print(f"❌ Error during ingestion: {e}")
+        except RequestException as e:
+            print(f"❌ API error after {MAX_RETRIES} attempts: {e}")
+            break
+        except SQLAlchemyError as e:
+            print(f"❌ Database error during ingestion: {e}")
+            break
+        except (KeyError, ValueError) as e:
+            print(f"❌ Data parsing error: {e}")
             break
             
     print(f"🏁 Job Complete. Synced {total_inserted} rows across {pages_processed + 1} pages.")
