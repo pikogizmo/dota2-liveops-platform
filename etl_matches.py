@@ -1,8 +1,10 @@
 import os
 import time
 import requests
+from requests.exceptions import RequestException
 from sqlalchemy import create_engine, MetaData, Table, Column, BigInteger, DateTime, func, select
 from sqlalchemy.dialects.postgresql import insert, JSONB
+from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -20,7 +22,7 @@ def get_db_max_match_id(engine, matches_table):
             query = select(func.max(matches_table.c.match_id))
             result = conn.execute(query).scalar()
             return result if result is not None else 0
-    except Exception:
+    except SQLAlchemyError:
         return 0
 
 def ingest_pro_matches():
@@ -92,8 +94,14 @@ def ingest_pro_matches():
             pages_processed += 1
             time.sleep(1) # Rate limit compliance
 
-        except Exception as e:
-            print(f"❌ Error during ingestion: {e}")
+        except RequestException as e:
+            print(f"❌ API error during ingestion: {e}")
+            break
+        except SQLAlchemyError as e:
+            print(f"❌ Database error during ingestion: {e}")
+            break
+        except (KeyError, ValueError) as e:
+            print(f"❌ Data parsing error: {e}")
             break
             
     print(f"🏁 Job Complete. Synced {total_inserted} rows across {pages_processed + 1} pages.")
