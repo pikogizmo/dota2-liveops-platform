@@ -16,35 +16,52 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 with open("patch_config.toml", "rb") as f:
     config = tomllib.load(f)
 
-PATCH_NAME = config["current_meta"]["patch_name"]
-START_TIMESTAMP = config["current_meta"]["start_timestamp"]
-PATCH_ID = config["current_meta"]["patch_id"]
+# Load current patch and history
+CURRENT_PATCH = config["current_meta"]
+PATCH_HISTORY = config.get("patch_history", [])
 
-def generate_meta_chart():
-    print("🎨 Generating Meta Snapshot...")
+# Build list of all patches (current first, then history)
+ALL_PATCHES = [CURRENT_PATCH] + PATCH_HISTORY
+
+def get_engine():
+    return create_engine(DATABASE_URL)
+
+def generate_patch_charts(engine, patch, is_current=False):
+    """Generate all charts for a single patch. Returns dict of Plotly figure HTML strings."""
+    patch_name = patch["patch_name"]
+    start_ts = patch["start_timestamp"]
     
-    engine = create_engine(DATABASE_URL)
+    # Use lower thresholds for current patch (less data available)
+    min_picks = 3 if is_current else 12
+    min_synergy_matches = 5 if is_current else 15
+    end_ts = patch.get("end_timestamp")  # None for current patch
+    
+    # Date filter SQL
+    if end_ts:
+        date_filter = "match_date >= to_timestamp(%(start_ts)s) AND match_date <= to_timestamp(%(end_ts)s)"
+        params = {"start_ts": start_ts, "end_ts": end_ts}
+    else:
+        date_filter = "match_date >= to_timestamp(%(start_ts)s)"
+        params = {"start_ts": start_ts}
     
     # Fetch date range
-    print("   ... Fetching Date Range")
-    date_query = """
+    date_query = f"""
     SELECT min(match_date) as start_date, max(match_date) as end_date 
     FROM analytics.picks_bans 
-    WHERE match_date >= to_timestamp(%(start_timestamp)s)
+    WHERE {date_filter}
     """
     with engine.connect() as conn:
-        date_df = pd.read_sql(date_query, conn, params={"start_timestamp": START_TIMESTAMP})
+        date_df = pd.read_sql(date_query, conn, params=params)
     
     if date_df['start_date'][0] is None:
-        print("❌ No data found in database!")
-        return
-
+        return None, f"No data for {patch_name}"
+    
     start_date = pd.to_datetime(date_df['start_date'][0]).strftime('%b %d')
     end_date = pd.to_datetime(date_df['end_date'][0]).strftime('%b %d')
     date_label = f"({start_date} - {end_date})"
     
     # Fetch hero data
-    query = """
+    hero_query = f"""
     SELECT 
         h.hero_name,
         count(*) as total_picks,
@@ -52,21 +69,161 @@ def generate_meta_chart():
     FROM analytics.picks_bans pb
     JOIN raw.heroes h ON h.hero_id = pb.hero_id
     WHERE pb.is_pick IS TRUE
-    AND pb.match_date >= to_timestamp(%(start_timestamp)s)
+    AND {date_filter}
     GROUP BY h.hero_name
-    HAVING count(*) > 12  -- Only show heroes with decent sample size
+    HAVING count(*) > {min_picks}
     ORDER BY total_picks DESC;
     """
     
     with engine.connect() as conn:
-        df = pd.read_sql(query, conn, params={"start_timestamp": START_TIMESTAMP})
+        df = pd.read_sql(hero_query, conn, params=params)
     
     if df.empty:
-        print("❌ Not enough data to plot yet!")
-        return
+        return None, f"Not enough data for {patch_name}"
+    
+    charts = {}
+    
+    # Scatter Chart
+    fig_scatter = px.scatter(
+        df,
+        x="total_picks",
+        y="win_rate",
+        hover_name="hero_name",
+        size="total_picks",
+        color="win_rate",
+        color_continuous_scale="RdYlGn",
+        title=f"<b>Meta Scatter ({patch_name}): Win Rate vs. Popularity</b> {date_label}",
+        labels={"total_picks": "Total Picks", "win_rate": "Win Rate %"}
+    )
+    fig_scatter.update_layout(height=600, showlegend=False)
+    charts['scatter'] = fig_scatter.to_html(full_html=False, include_plotlyjs=False)
+    
+    # Bar Chart (Top 10 Win Rate)
+    top_10_win = df.nlargest(10, 'win_rate')
+    fig_bar = px.bar(
+        top_10_win,
+        x="hero_name",
+        y="win_rate",
+        hover_data=["total_picks"],
+        color="win_rate",
+        color_continuous_scale="RdYlGn",
+        title=f"<b>Top 10 Highest Win Rate Heroes ({patch_name})</b> {date_label}",
+        labels={"hero_name": "Hero", "win_rate": "Win Rate %", "total_picks": "Total Picks"}
+    )
+    fig_bar.update_layout(height=500, showlegend=False)
+    fig_bar.update_yaxes(range=[0, 100])
+    charts['bar'] = fig_bar.to_html(full_html=False, include_plotlyjs=False)
+    
+    # Model Weights Chart
+    weights_file = "draft_weights.csv"
+    if os.path.exists(weights_file):
+        try:
+            weights_df = pd.read_csv(weights_file)
+            top_10 = weights_df.head(10)
+            bottom_10 = weights_df.tail(10)
+            combined_weights = pd.concat([top_10, bottom_10]).sort_values(by="coefficient")
+            
+            fig_weights = px.bar(
+                combined_weights,
+                x="coefficient",
+                y="hero_name",
+                orientation='h',
+                color="coefficient",
+                color_continuous_scale="RdYlGn",
+                title=f"<b>Meta Impact: Hero Draft Weights ({patch_name})</b>",
+                labels={"coefficient": "Draft Impact (Log Odds)", "hero_name": "Hero"}
+            )
+            fig_weights.update_layout(height=600, showlegend=False)
+            charts['weights'] = fig_weights.to_html(full_html=False, include_plotlyjs=False)
+        except Exception as e:
+            print(f"⚠️ Failed to generate weights chart: {e}")
+    
+    # Synergy Chart
+    synergy_query = f"""
+    SELECT 
+        h1.hero_name || ' + ' || h2.hero_name as combo_name,
+        count(*) as matches_played,
+        round(avg(case when pb1.is_winner then 1 else 0 end) * 100, 2) as win_rate
+    FROM analytics.picks_bans pb1
+    JOIN analytics.picks_bans pb2 ON pb1.match_id = pb2.match_id AND pb1.team = pb2.team
+    JOIN raw.heroes h1 ON h1.hero_id = pb1.hero_id
+    JOIN raw.heroes h2 ON h2.hero_id = pb2.hero_id
+    WHERE pb1.is_pick IS TRUE 
+    AND pb2.is_pick IS TRUE
+    AND pb1.hero_id < pb2.hero_id
+    AND {date_filter.replace('match_date', 'pb1.match_date')}
+    GROUP BY 1
+    HAVING count(*) >= {min_synergy_matches}
+    ORDER BY win_rate DESC
+    LIMIT 15;
+    """
+    
+    try:
+        with engine.connect() as conn:
+            synergy_df = pd.read_sql(synergy_query, conn, params=params)
+            
+        if not synergy_df.empty:
+            fig_synergy = px.bar(
+                synergy_df,
+                x="win_rate",
+                y="combo_name",
+                orientation='h',
+                hover_data=["matches_played"],
+                color="win_rate",
+                color_continuous_scale="RdYlGn",
+                title=f"<b>Top 15 Best Hero Combos (Synergy)</b> {date_label}",
+                labels={"win_rate": "Win Rate %", "combo_name": "Hero Duo", "matches_played": "Matches"}
+            )
+            fig_synergy.update_layout(height=600, showlegend=False)
+            fig_synergy.update_yaxes(autorange="reversed")
+            charts['synergy'] = fig_synergy.to_html(full_html=False, include_plotlyjs=False)
+    except Exception as e:
+        print(f"⚠️ Failed to generate synergy chart: {e}")
+    
+    return charts, date_label
 
-    # Generate static plot
-    print("   ... Generating Static Image")
+def generate_static_chart(engine, patch):
+    """Generate static PNG for current patch only."""
+    patch_name = patch["patch_name"]
+    start_ts = patch["start_timestamp"]
+    
+    date_query = """
+    SELECT min(match_date) as start_date, max(match_date) as end_date 
+    FROM analytics.picks_bans 
+    WHERE match_date >= to_timestamp(%(start_ts)s)
+    """
+    with engine.connect() as conn:
+        date_df = pd.read_sql(date_query, conn, params={"start_ts": start_ts})
+    
+    if date_df['start_date'][0] is None:
+        print("❌ No data found for static chart!")
+        return
+    
+    start_date = pd.to_datetime(date_df['start_date'][0]).strftime('%b %d')
+    end_date = pd.to_datetime(date_df['end_date'][0]).strftime('%b %d')
+    date_label = f"({start_date} - {end_date})"
+    
+    hero_query = """
+    SELECT 
+        h.hero_name,
+        count(*) as total_picks,
+        round(avg(case when pb.is_winner then 1 else 0 end) * 100, 2) as win_rate
+    FROM analytics.picks_bans pb
+    JOIN raw.heroes h ON h.hero_id = pb.hero_id
+    WHERE pb.is_pick IS TRUE
+    AND pb.match_date >= to_timestamp(%(start_ts)s)
+    GROUP BY h.hero_name
+    HAVING count(*) > 12
+    ORDER BY total_picks DESC;
+    """
+    
+    with engine.connect() as conn:
+        df = pd.read_sql(hero_query, conn, params={"start_ts": start_ts})
+    
+    if df.empty:
+        print("❌ Not enough data for static chart!")
+        return
+    
     plt.figure(figsize=(12, 8))
     sns.set_style("darkgrid")
     
@@ -91,162 +248,142 @@ def generate_meta_chart():
     
     adjust_text(texts, arrowprops=dict(arrowstyle='-', color='gray', alpha=0.5))
 
-    plt.title(f"Dota 2 Pro Meta ({PATCH_NAME}): Win Rate vs. Popularity {date_label}\n(n={len(df)} heroes)", fontsize=16, fontweight='bold')
+    plt.title(f"Dota 2 Pro Meta ({patch_name}): Win Rate vs. Popularity {date_label}\n(n={len(df)} heroes)", fontsize=16, fontweight='bold')
     plt.xlabel("Total Picks (Popularity)", fontsize=12)
     plt.ylabel("Win Rate %", fontsize=12)
     plt.axhline(50, color='red', linestyle='--', alpha=0.5, label="50% Win Rate")
     plt.legend()
     
-    output_file_static = "meta_snapshot.png"
-    plt.savefig(output_file_static, dpi=300, bbox_inches='tight')
-    print(f"✅ Static Chart saved to {output_file_static}")
+    output_file = "meta_snapshot.png"
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    print(f"✅ Static Chart saved to {output_file}")
 
-    # Generate interactive report
+def generate_meta_chart():
+    print("🎨 Generating Meta Snapshot...")
+    
+    engine = get_engine()
+    
+    # Generate static chart for current patch
+    print("   ... Generating Static Image (Current Patch)")
+    generate_static_chart(engine, CURRENT_PATCH)
+    
+    # Generate interactive report with tabs
     print("   ... Generating Interactive HTML Report")
     
-    # Calculate standard error
-    df['p'] = df['win_rate'] / 100
-    df['std_error'] = np.sqrt((df['p'] * (1 - df['p'])) / df['total_picks']) * 100 # Convert back to percentage
-
-    # Scatter Chart
-    fig_scatter = px.scatter(
-        df,
-        x="total_picks",
-        y="win_rate",
-        hover_name="hero_name",
-        size="total_picks",
-        color="win_rate",
-        color_continuous_scale="RdYlGn",
-        title=f"<b>Meta Scatter ({PATCH_NAME}): Win Rate vs. Popularity</b> {date_label}",
-        labels={"total_picks": "Total Picks", "win_rate": "Win Rate %"}
-    )
-    fig_scatter.update_layout(height=600, showlegend=False)
-
-    # Bar Chart (Top 10 Win Rate)
-    top_10_win = df.nlargest(10, 'win_rate')
+    all_patch_data = []
+    for i, patch in enumerate(ALL_PATCHES):
+        is_current = (i == 0)  # First patch is current
+        print(f"   ... Processing {patch['patch_name']}")
+        charts, date_label = generate_patch_charts(engine, patch, is_current=is_current)
+        if charts:
+            all_patch_data.append({
+                "patch": patch,
+                "charts": charts,
+                "date_label": date_label
+            })
     
-    fig_bar = px.bar(
-        top_10_win,
-        x="hero_name",
-        y="win_rate",
-        hover_data=["total_picks"],
-        color="win_rate",
-        color_continuous_scale="RdYlGn",
-        title=f"<b>Top 10 Highest Win Rate Heroes ({PATCH_NAME})</b> {date_label}",
-        labels={"hero_name": "Hero", "win_rate": "Win Rate %", "total_picks": "Total Picks"}
-    )
-    fig_bar.update_layout(height=500, showlegend=False)
-    fig_bar.update_yaxes(range=[0, 100])
-
-    # Model Weights Chart (Horizontal Bar)
-    weights_file = "draft_weights.csv"
-    fig_weights_html = ""
+    if not all_patch_data:
+        print("❌ No data available for any patch!")
+        return
     
-    if os.path.exists(weights_file):
-        try:
-            weights_df = pd.read_csv(weights_file)
+    # Build tabs HTML
+    tabs_html = ""
+    content_html = ""
+    
+    for i, data in enumerate(all_patch_data):
+        patch_name = data["patch"]["patch_name"]
+        is_active = "active" if i == 0 else ""
+        patch_id = patch_name.replace(".", "_")
+        
+        # Tab button
+        tabs_html += f'<button class="tab-btn {is_active}" onclick="openTab(event, \'{patch_id}\')">{patch_name}</button>\n'
+        
+        # Tab content
+        display = "block" if i == 0 else "none"
+        charts = data["charts"]
+        
+        content_html += f'''
+        <div id="{patch_id}" class="tab-content" style="display: {display};">
+            <div class="chart-container">{charts.get('scatter', '')}</div>
+            <div class="chart-container">{charts.get('bar', '')}</div>
+            {"<div class='chart-container'>" + charts.get('weights', '') + "</div>" if 'weights' in charts else ""}
+            {"<div class='chart-container'>" + charts.get('synergy', '') + "</div>" if 'synergy' in charts else ""}
+        </div>
+        '''
+    
+    last_updated = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+    current_patch_name = CURRENT_PATCH["patch_name"]
+    
+    html_content = f"""
+    <html>
+    <head>
+        <title>Dota 2 Meta Report - Last Updated: {last_updated}</title>
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <style>
+            body {{ font-family: sans-serif; margin: 20px; background-color: #f4f4f9; }}
+            .chart-container {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 30px; }}
+            h1 {{ text-align: center; color: #333; }}
+            .timestamp {{ text-align: center; color: #666; font-size: 0.9em; margin-bottom: 20px; }}
             
-            # Get Top 10 and Bottom 10
-            top_10 = weights_df.head(10)
-            bottom_10 = weights_df.tail(10)
-            combined_weights = pd.concat([top_10, bottom_10]).sort_values(by="coefficient")
-            
-            fig_weights = px.bar(
-                combined_weights,
-                x="coefficient",
-                y="hero_name",
-                orientation='h',
-                color="coefficient",
-                color_continuous_scale="RdYlGn",
-                title=f"<b>Meta Impact: Hero Draft Weights ({PATCH_NAME})</b>",
-                labels={"coefficient": "Draft Impact (Log Odds)", "hero_name": "Hero"}
-            )
-            fig_weights.update_layout(height=600, showlegend=False)
-            fig_weights_html = f'<div class="chart-container">{fig_weights.to_html(full_html=False, include_plotlyjs=False)}</div>'
-            
-        except Exception as e:
-            print(f"⚠️ Failed to generate weights chart: {e}")
-    else:
-        print("⚠️ draft_weights.csv not found. Skipping model chart.")
-
-    # Synergy Chart (Top 15 Combos)
-    synergy_query = """
-    SELECT 
-        h1.hero_name || ' + ' || h2.hero_name as combo_name,
-        count(*) as matches_played,
-        round(avg(case when pb1.is_winner then 1 else 0 end) * 100, 2) as win_rate
-    FROM analytics.picks_bans pb1
-    JOIN analytics.picks_bans pb2 ON pb1.match_id = pb2.match_id AND pb1.team = pb2.team
-    JOIN raw.heroes h1 ON h1.hero_id = pb1.hero_id
-    JOIN raw.heroes h2 ON h2.hero_id = pb2.hero_id
-    WHERE pb1.is_pick IS TRUE 
-    AND pb2.is_pick IS TRUE
-    AND pb1.match_date >= to_timestamp(%(start_timestamp)s)
-    AND pb1.hero_id < pb2.hero_id -- Avoid duplicates (A-B vs B-A) and self-joins
-    GROUP BY 1
-    HAVING count(*) >= 15
-    ORDER BY win_rate DESC
-    LIMIT 15;
+            /* Tab styles */
+            .tab-container {{ display: flex; justify-content: center; margin-bottom: 20px; gap: 10px; }}
+            .tab-btn {{
+                padding: 12px 24px;
+                font-size: 16px;
+                font-weight: bold;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                background-color: #ddd;
+                color: #333;
+                transition: all 0.3s ease;
+            }}
+            .tab-btn:hover {{ background-color: #bbb; }}
+            .tab-btn.active {{
+                background-color: #2ecc71;
+                color: white;
+            }}
+            .tab-content {{ display: none; }}
+        </style>
+    </head>
+    <body>
+        <h1>🛡️ Dota 2 Meta Report</h1>
+        <div class="timestamp">Last Updated: {last_updated}</div>
+        
+        <div class="tab-container">
+            {tabs_html}
+        </div>
+        
+        {content_html}
+        
+        <script>
+            function openTab(evt, patchId) {{
+                // Hide all tab content
+                var tabcontent = document.getElementsByClassName("tab-content");
+                for (var i = 0; i < tabcontent.length; i++) {{
+                    tabcontent[i].style.display = "none";
+                }}
+                
+                // Remove active class from all tabs
+                var tabbtns = document.getElementsByClassName("tab-btn");
+                for (var i = 0; i < tabbtns.length; i++) {{
+                    tabbtns[i].className = tabbtns[i].className.replace(" active", "");
+                }}
+                
+                // Show selected tab and mark button as active
+                document.getElementById(patchId).style.display = "block";
+                evt.currentTarget.className += " active";
+            }}
+        </script>
+    </body>
+    </html>
     """
     
-    fig_synergy_html = ""
-    try:
-        with engine.connect() as conn:
-            synergy_df = pd.read_sql(synergy_query, conn, params={"start_timestamp": START_TIMESTAMP})
-            
-        if not synergy_df.empty:
-            fig_synergy = px.bar(
-                synergy_df,
-                x="win_rate",
-                y="combo_name",
-                orientation='h',
-                hover_data=["matches_played"],
-                color="win_rate",
-                color_continuous_scale="RdYlGn",
-                title=f"<b>Top 15 Best Hero Combos (Synergy)</b> {date_label}",
-                labels={"win_rate": "Win Rate %", "combo_name": "Hero Duo", "matches_played": "Matches"}
-            )
-            fig_synergy.update_layout(height=600, showlegend=False)
-            fig_synergy.update_yaxes(autorange="reversed") # Highest win rate on top
-            fig_synergy_html = f'<div class="chart-container">{fig_synergy.to_html(full_html=False, include_plotlyjs=False)}</div>'
-        else:
-             print("⚠️ Not enough synergy data found.")
-
-    except Exception as e:
-        print(f"⚠️ Failed to generate synergy chart: {e}")
-
-    # Combine into HTML
-    output_file_html = "index.html"
-    last_updated = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+    output_file = "index.html"
+    with open(output_file, 'w') as f:
+        f.write(html_content)
     
-    with open(output_file_html, 'w') as f:
-        f.write(f"""
-        <html>
-        <head>
-            <title>Dota 2 Meta Report ({PATCH_NAME}) {date_label} - Last Updated: {last_updated}</title>
-            <style>
-                body {{ font-family: sans-serif; margin: 20px; background-color: #f4f4f9; }}
-                .chart-container {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 30px; }}
-                h1 {{ text-align: center; color: #333; }}
-                .timestamp {{ text-align: center; color: #666; font-size: 0.9em; margin-bottom: 20px; }}
-            </style>
-        </head>
-        <body>
-            <h1>🛡️ Dota 2 Meta Report ({PATCH_NAME}) {date_label}</h1>
-            <div class="timestamp">Last Updated: {last_updated}</div>
-            <div class="chart-container">
-                {fig_scatter.to_html(full_html=False, include_plotlyjs='cdn')}
-            </div>
-            <div class="chart-container">
-                {fig_bar.to_html(full_html=False, include_plotlyjs=False)} 
-            </div>
-            {fig_weights_html}
-            {fig_synergy_html}
-        </body>
-        </html>
-        """)
-        
-    print(f"✅ Interactive Report saved to {output_file_html}")
+    print(f"✅ Interactive Report saved to {output_file}")
 
 if __name__ == "__main__":
     generate_meta_chart()
