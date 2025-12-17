@@ -245,7 +245,7 @@ def generate_patch_charts(engine, patch, is_current=False):
             )
             charts['weights'] = fig_to_html(fig_weights)
         except Exception as e:
-            print(f"⚠️ Failed to generate weights chart: {e}")
+            print(f"Failed to generate weights chart: {e}")
     
     # --- Synergy Chart ---
     synergy_query = f"""
@@ -299,7 +299,7 @@ def generate_patch_charts(engine, patch, is_current=False):
             )
             charts['synergy'] = fig_to_html(fig_synergy)
     except Exception as e:
-        print(f"⚠️ Failed to generate synergy chart: {e}")
+        print(f"Failed to generate synergy chart: {e}")
     
     return charts, date_label
 
@@ -317,7 +317,7 @@ def generate_static_chart(engine, patch):
         date_df = pd.read_sql(date_query, conn, params={"start_ts": start_ts})
     
     if date_df['start_date'][0] is None:
-        print("❌ No data found for static chart!")
+        print("No data found for static chart")
         return
     
     start_date = pd.to_datetime(date_df['start_date'][0]).strftime('%b %d')
@@ -342,7 +342,7 @@ def generate_static_chart(engine, patch):
         df = pd.read_sql(hero_query, conn, params={"start_ts": start_ts})
     
     if df.empty:
-        print("❌ Not enough data for static chart!")
+        print("Not enough data for static chart")
         return
     
     plt.figure(figsize=(12, 8))
@@ -377,10 +377,10 @@ def generate_static_chart(engine, patch):
     
     output_file = "meta_snapshot.png"
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
-    print(f"✅ Static Chart saved to {output_file}")
+    print(f"Static Chart saved to {output_file}")
 
 def generate_meta_chart():
-    print("🎨 Generating Meta Snapshot...")
+    print("Generating Meta Snapshot...")
     
     engine = get_engine()
     
@@ -404,7 +404,7 @@ def generate_meta_chart():
             })
     
     if not all_patch_data:
-        print("❌ No data available for any patch!")
+        print("No data available for any patch")
         return
     
     # Build tabs HTML
@@ -468,7 +468,7 @@ def generate_meta_chart():
         </style>
     </head>
     <body>
-        <h1>🛡️ Dota 2 Meta Report</h1>
+        <h1>Dota 2 Meta Report</h1>
         <div class="timestamp">Last Updated: {last_updated}</div>
         
         <div class="tab-container">
@@ -509,7 +509,7 @@ def generate_meta_chart():
     with open(output_file, 'w') as f:
         f.write(html_content)
     
-    print(f"✅ Interactive Report saved to {output_file}")
+    print(f"Interactive Report saved to {output_file}")
 
 if __name__ == "__main__":
     generate_meta_chart()

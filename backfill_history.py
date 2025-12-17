@@ -36,7 +36,7 @@ def make_request_with_retry(url, params=None, max_retries=3):
             
             if response.status_code == 429:
                 wait_time = 60 * (2 ** attempt) # 60s, 120s, 240s
-                print(f"⚠️ Rate limit hit (429). Waiting {wait_time}s before retry {attempt + 1}/{max_retries}...")
+                print(f"Rate limit hit (429). Waiting {wait_time}s before retry {attempt + 1}/{max_retries}...")
                 time.sleep(wait_time)
                 continue
                 
@@ -47,7 +47,7 @@ def make_request_with_retry(url, params=None, max_retries=3):
             print(f"Error making request: {e}")
             return None
             
-    print("❌ Max retries exceeded.")
+    print("Max retries exceeded.")
     return None
 
 def fetch_matches(less_than_match_id=None):
