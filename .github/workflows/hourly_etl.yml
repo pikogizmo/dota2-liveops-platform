@@ -1,6 +1,9 @@
 name: Hourly Data Pipeline
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     # Run at minute 15 of every hour
     - cron: '15 * * * *'
