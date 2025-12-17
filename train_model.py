@@ -30,8 +30,8 @@ def build_features(raw_df):
     labels = []
     
     for match_id, group in grouped:
-        radiant = set(group[group['team'] == 0]['hero_id'])
-        dire = set(group[group['team'] == 1]['hero_id'])
+        radiant = set(group[group['team'] == 0]['hero_id'].astype(int))
+        dire = set(group[group['team'] == 1]['hero_id'].astype(int))
         
         row = {}
         for h in heroes:
