@@ -18,11 +18,10 @@ def ingest_match_details():
     Identifies matches missing detailed replay data (picks/bans, items)
     and fetches them incrementally.
     """
-    print("🚀 [Details ETL] Job started...")
+    print("[Details ETL] Job started...")
     
     engine = create_engine(DATABASE_URL)
     
-    # Identify gaps in the match_details table
     query = text(f"""
         SELECT p.match_id 
         FROM raw.pro_matches p
@@ -36,10 +35,10 @@ def ingest_match_details():
         missing_ids = [row[0] for row in conn.execute(query)]
     
     if not missing_ids:
-        print("✅ System up to date.")
+        print("System up to date.")
         return
 
-    print(f"📦 Batch processing {len(missing_ids)} matches...")
+    print(f"Batch processing {len(missing_ids)} matches...")
 
     metadata = MetaData(schema="raw")
     details_table = Table(
@@ -58,11 +57,11 @@ def ingest_match_details():
             response = requests.get(f"{API_BASE_URL}/{match_id}", params=params)
             
             if response.status_code == 429:
-                print("⚠️ Rate limit reached. Aborting batch.")
+                print("Rate limit reached. Aborting batch.")
                 break
             
             if response.status_code == 404:
-                print("❌ Match not found/expired.")
+                print("Match not found/expired.")
                 continue
 
             response.raise_for_status()
@@ -80,9 +79,9 @@ def ingest_match_details():
             time.sleep(DELAY_SECONDS)
             
         except Exception as e:
-            print(f"❌ Failed: {e}")
+            print(f"Failed: {e}")
 
-    print(f"🏁 Batch complete: {processed_count}/{len(missing_ids)} processed.")
+    print(f"Batch complete: {processed_count}/{len(missing_ids)} processed.")
 
 if __name__ == "__main__":
     ingest_match_details()

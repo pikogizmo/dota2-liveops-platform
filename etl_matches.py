@@ -18,7 +18,7 @@ MAX_RETRIES = 3
 RETRY_BACKOFF_BASE = 2
 
 def get_db_max_match_id(engine, matches_table):
-    """Retrieves the highest match_id currently stored to ensure gapless ingestion."""
+    """Retrieves the highest match_id currently stored."""
     try:
         with engine.connect() as conn:
             query = select(func.max(matches_table.c.match_id))
@@ -32,7 +32,7 @@ def ingest_pro_matches():
     Fetches pro match history from OpenDota.
     Uses pagination to bridge gaps between the last stored match and the live API feed.
     """
-    print(f"🚀 [Match ETL] Job started at {datetime.now()}")
+    print(f"[Match ETL] Job started at {datetime.now()}")
     
     engine = create_engine(DATABASE_URL)
     metadata = MetaData(schema="raw")
@@ -57,7 +57,6 @@ def ingest_pro_matches():
             if OPENDOTA_API_KEY:
                 params['api_key'] = OPENDOTA_API_KEY
             
-            # Retry loop with exponential backoff for transient API failures
             matches_data = None
             for attempt in range(MAX_RETRIES):
                 try:
@@ -68,20 +67,19 @@ def ingest_pro_matches():
                 except RequestException as e:
                     if attempt < MAX_RETRIES - 1:
                         wait_time = RETRY_BACKOFF_BASE ** (attempt + 1)
-                        print(f"   ⚠️  API request failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
-                        print(f"   ⏳ Retrying in {wait_time}s...")
+                        print(f"   API request failed (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
+                        print(f"   Retrying in {wait_time}s...")
                         time.sleep(wait_time)
                     else:
                         raise
             
             if matches_data is None:
-                print("❌ Failed to fetch data after all retries.")
+                print("Failed to fetch data after all retries.")
                 break
             
             if not matches_data:
                 break
 
-            # Transform & Upsert
             rows_to_insert = [
                 {
                     "match_id": m["match_id"],
@@ -91,7 +89,6 @@ def ingest_pro_matches():
                 for m in matches_data
             ]
             
-            # Determine the oldest match in this batch for pagination cursor
             min_batch_id = min(m["match_id"] for m in matches_data)
 
             stmt = insert(matches_table).values(rows_to_insert)
@@ -104,26 +101,25 @@ def ingest_pro_matches():
                 result = conn.execute(do_update_stmt)
                 total_inserted += result.rowcount
 
-            # Integrity Check: Stop if we overlap with existing data
             if min_batch_id <= current_max_id:
-                print("   ✅ Gap closed. Connected to existing history.")
+                print("   Gap closed. Connected to existing history.")
                 break
             
             last_fetched_match_id = min_batch_id
             pages_processed += 1
-            time.sleep(1) # Rate limit compliance
+            time.sleep(1)
 
         except RequestException as e:
-            print(f"❌ API error after {MAX_RETRIES} attempts: {e}")
+            print(f"API error after {MAX_RETRIES} attempts: {e}")
             break
         except SQLAlchemyError as e:
-            print(f"❌ Database error during ingestion: {e}")
+            print(f"Database error during ingestion: {e}")
             break
         except (KeyError, ValueError) as e:
-            print(f"❌ Data parsing error: {e}")
+            print(f"Data parsing error: {e}")
             break
             
-    print(f"🏁 Job Complete. Synced {total_inserted} rows across {pages_processed + 1} pages.")
+    print(f"Job complete. Synced {total_inserted} rows across {pages_processed + 1} pages.")
 
 if __name__ == "__main__":
     ingest_pro_matches()

@@ -20,4 +20,8 @@ __pycache__/
 # Build Artifacts
 index.html
 meta_snapshot.html
+draft_weights_58.csv
+draft_weights_59.csv
+debug_plotly.py
 draft_weights.csv
+validate_html.py

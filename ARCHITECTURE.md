@@ -1,4 +1,4 @@
-# 🏗️ System Architecture & Engineering Runbook
+# System Architecture & Engineering Runbook
 
 ## 1. High-Level Stack
 * **Compute (Local):** WSL2 (Ubuntu) + Python 3.11 + `uv` (Package Manager).
@@ -6,7 +6,7 @@
 * **Storage:** Neon PostgreSQL (Serverless, Autoscaling).
 * **Orchestration:** GitHub Actions Cron (`.github/workflows/hourly_etl.yml`).
 * **Transformation:** dbt Core (`dbt_analytics/`).
-* **Machine Learning:** Scikit-Learn (Logistic Regression).
+* **Machine Learning:** Scikit-Learn + XGBoost (Ensemble Voting Classifier).
 * **Presentation:** GitHub Pages (Static Hosting).
 
 ## 2. Data Flow Diagram
@@ -53,9 +53,9 @@
 * **Solution:** We select matches present in `pro_matches` but NULL in `match_details`.
 * **Where:** `etl_match_details.py`.
 
-### Rolling Window Training
-* **Problem:** Meta shifts constantly; historical data becomes stale.
-* **Solution:** The model trains only on matches from the last 30 days (`WHERE match_date > NOW() - INTERVAL '30 days'`).
+### Patch-Based Model Training
+* **Problem:** Meta shifts with each patch; historical data becomes stale.
+* **Solution:** The model trains separately per patch using timestamp ranges from `patch_config.toml`.
 * **Where:** `train_model.py`.
 
 ### Synergy Analysis
