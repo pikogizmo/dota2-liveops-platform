@@ -24,7 +24,8 @@ def get_db_max_match_id(engine, matches_table):
             query = select(func.max(matches_table.c.match_id))
             result = conn.execute(query).scalar()
             return result if result is not None else 0
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
+        print(f"   Warning: Error fetching max match_id (defaulting to 0): {e}")
         return 0
 
 def ingest_pro_matches():
@@ -41,6 +42,7 @@ def ingest_pro_matches():
         'pro_matches', metadata,
         Column('match_id', BigInteger, primary_key=True),
         Column('start_time', DateTime),
+        Column('ingested_at', DateTime, default=func.now()),
         Column('raw_data', JSONB)
     )
 
@@ -84,6 +86,7 @@ def ingest_pro_matches():
                 {
                     "match_id": m["match_id"],
                     "start_time": datetime.fromtimestamp(m["start_time"]),
+                    "ingested_at": datetime.now(),
                     "raw_data": m
                 }
                 for m in matches_data
@@ -94,7 +97,11 @@ def ingest_pro_matches():
             stmt = insert(matches_table).values(rows_to_insert)
             do_update_stmt = stmt.on_conflict_do_update(
                 index_elements=['match_id'],
-                set_={'raw_data': stmt.excluded.raw_data, 'start_time': stmt.excluded.start_time}
+                set_={
+                    'raw_data': stmt.excluded.raw_data, 
+                    'start_time': stmt.excluded.start_time,
+                    'ingested_at': stmt.excluded.ingested_at
+                }
             )
 
             with engine.begin() as conn:

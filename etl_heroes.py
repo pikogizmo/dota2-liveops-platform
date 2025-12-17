@@ -1,6 +1,7 @@
 import os
 import requests
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, DateTime, func
+from datetime import datetime
 from sqlalchemy.dialects.postgresql import insert, JSONB
 from dotenv import load_dotenv
 
@@ -29,6 +30,7 @@ def ingest_heroes():
         'heroes', metadata,
         Column('hero_id', Integer, primary_key=True),
         Column('hero_name', String),
+        Column('ingested_at', DateTime, default=func.now()),
         Column('raw_data', JSONB)
     )
 
@@ -37,6 +39,7 @@ def ingest_heroes():
         rows_to_insert.append({
             "hero_id": hero["id"],
             "hero_name": hero["localized_name"],
+            "ingested_at": datetime.now(),
             "raw_data": hero
         })
 
@@ -46,6 +49,7 @@ def ingest_heroes():
         index_elements=['hero_id'],
         set_={
             'hero_name': stmt.excluded.hero_name,
+            'ingested_at': stmt.excluded.ingested_at,
             'raw_data': stmt.excluded.raw_data,
         }
     )

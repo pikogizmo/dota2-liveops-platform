@@ -52,7 +52,7 @@ def clean_fig(fig):
                 if val is not None and not isinstance(val, (str, dict)):
                     try:
                         d['data'][i][field_name] = to_clean_list(val)
-                    except:
+                    except (TypeError, AttributeError):
                         pass # Valid for scalars or non-iterables
         
         clean_field('x')
@@ -66,6 +66,13 @@ def clean_fig(fig):
              if c is not None and hasattr(c, '__len__') and not isinstance(c, (str, bytes)):
                  if 'marker' not in d['data'][i]: d['data'][i]['marker'] = {}
                  d['data'][i]['marker']['color'] = to_clean_list(c)
+        
+        # Marker size
+        if hasattr(trace, 'marker') and trace.marker is not None:
+             s = getattr(trace.marker, 'size', None)
+             if s is not None and hasattr(s, '__len__') and not isinstance(s, (str, bytes)):
+                 if 'marker' not in d['data'][i]: d['data'][i]['marker'] = {}
+                 d['data'][i]['marker']['size'] = to_clean_list(s)
 
     return d
 
@@ -160,6 +167,8 @@ def generate_patch_charts(engine, patch, is_current=False):
         df,
         x="total_picks",
         y="win_rate",
+        size="total_picks",
+        size_max=15,
         color="win_rate",
         color_continuous_scale="RdYlGn",
         title=f"<b>Meta Scatter ({patch_name}): Win Rate vs. Popularity</b> {date_label}",
@@ -171,7 +180,7 @@ def generate_patch_charts(engine, patch, is_current=False):
         mode='markers',
         text=df['scatter_hover'],
         hovertemplate="%{text}<extra></extra>",
-        marker=dict(size=12, line=dict(width=1, color='DarkSlateGrey'), opacity=0.8)
+        marker=dict(line=dict(width=1, color='DarkSlateGrey'), opacity=0.8)
     )
     
     fig_scatter.update_layout(

@@ -1,7 +1,8 @@
 import os
 import time
 import requests
-from sqlalchemy import create_engine, text, MetaData, Table, Column, BigInteger
+from sqlalchemy import create_engine, text, MetaData, Table, Column, BigInteger, DateTime, func
+from datetime import datetime
 from sqlalchemy.dialects.postgresql import insert, JSONB
 from dotenv import load_dotenv
 
@@ -44,6 +45,7 @@ def ingest_match_details():
     details_table = Table(
         'match_details', metadata,
         Column('match_id', BigInteger, primary_key=True),
+        Column('ingested_at', DateTime, default=func.now()),
         Column('raw_data', JSONB)
     )
 
@@ -68,6 +70,7 @@ def ingest_match_details():
             
             stmt = insert(details_table).values(
                 match_id=match_id,
+                ingested_at=datetime.now(),
                 raw_data=response.json()
             ).on_conflict_do_nothing()
             
