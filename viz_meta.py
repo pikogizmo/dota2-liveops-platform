@@ -29,20 +29,45 @@ def get_engine():
     return create_engine(DATABASE_URL)
 
 def clean_fig(fig):
-    """Convert figure to dict and recursively clean numpy arrays to lists."""
+    """Convert figure to dict and manually overwrite data arrays with lists to avoid bdata."""
+    # 1. Start with Plotly's dict (contains bdata)
     d = fig.to_dict()
     
-    def clean_recursive(obj):
-        if isinstance(obj, dict):
-            return {k: clean_recursive(v) for k, v in obj.items()}
-        elif isinstance(obj, (list, tuple)):
-             return [clean_recursive(x) for x in obj]
-        elif isinstance(obj, (np.ndarray, pd.Series)):
-             return obj.tolist()
-        else:
-             return obj
-             
-    return clean_recursive(d)
+    # Helper to force pure python list
+    def to_clean_list(val):
+        if hasattr(val, 'tolist'):
+            return val.tolist()
+        if isinstance(val, (list, tuple)):
+             # Ensure elements are not numpy scalars
+             return [x.item() if hasattr(x, 'item') else x for x in val]
+        return list(val)
+
+    # 2. Overwrite known data arrays with clean lists from source figure
+    for i, trace in enumerate(fig.data):
+        # Helper to safely clean a field
+        def clean_field(field_name):
+            if hasattr(trace, field_name):
+                val = getattr(trace, field_name)
+                # If it's a sequence/array, force list
+                if val is not None and not isinstance(val, (str, dict)):
+                    try:
+                        d['data'][i][field_name] = to_clean_list(val)
+                    except:
+                        pass # Valid for scalars or non-iterables
+        
+        clean_field('x')
+        clean_field('y')
+        clean_field('text')
+        clean_field('customdata')
+        
+        # Marker color
+        if hasattr(trace, 'marker') and trace.marker is not None:
+             c = trace.marker.color
+             if c is not None and hasattr(c, '__len__') and not isinstance(c, (str, bytes)):
+                 if 'marker' not in d['data'][i]: d['data'][i]['marker'] = {}
+                 d['data'][i]['marker']['color'] = to_clean_list(c)
+
+    return d
 
 def fig_to_html(fig):
     """Serialize figure to HTML manually to bypass Plotly binary optimization."""
