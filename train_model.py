@@ -27,7 +27,7 @@ def train_for_patch(patch):
     end_ts = patch.get('end_timestamp') # None for current
     patch_id = patch['patch_id']
     
-    print(f"🧠 Training model for patch {patch_name}...")
+    print(f"Training model for patch {patch_name}...")
     engine = create_engine(DATABASE_URL)
 
     # Date filter logic
@@ -50,7 +50,7 @@ def train_for_patch(patch):
         raw_df = pd.read_sql(query, conn, params=params)
 
     if raw_df.empty:
-        print(f"❌ Insufficient training data for {patch_name}.")
+        print(f"Insufficient training data for {patch_name}.")
         return
 
     # Pivot data for one-hot encoding
@@ -86,10 +86,10 @@ def train_for_patch(patch):
 
     # Evaluate accuracy
     acc = accuracy_score(y_test, model.predict(X_test))
-    print(f"🎯 Model Accuracy: {acc:.2%}")
+    print(f"Model Accuracy: {acc:.2%}")
 
     # Analyze feature importance
-    print("\n🔮 -- DRAFT WEIGHT ANALYSIS --")
+    print("\n-- DRAFT WEIGHT ANALYSIS --")
     coefs = pd.Series(model.coef_[0], index=X.columns)
     
     # Create DataFrame for export
@@ -102,12 +102,12 @@ def train_for_patch(patch):
     
     output_file = f"draft_weights_{patch_id}.csv"
     weights_df.to_csv(output_file, index=False)
-    print(f"✅ Draft weights saved to {output_file}")
+    print(f"Draft weights saved to {output_file}")
 
-    print("🏆 Top 5 Radiant Advantages:")
+    print("Top 5 Radiant Advantages:")
     print(weights_df.head(5))
     
-    print("\n💀 Top 5 Radiant Disadvantages:")
+    print("\nTop 5 Radiant Disadvantages:")
     print(weights_df.tail(5))
 
 if __name__ == "__main__":
