@@ -371,12 +371,23 @@ def generate_static_chart(engine, patch):
     top_wins = df.nlargest(5, 'win_rate')['hero_name'].tolist()
     heroes_to_label = set(top_picks + top_wins)
 
+    rng = np.random.default_rng(42)  # Deterministic jitter for identical points
     texts = []
     for i, row in df.iterrows():
         if row['hero_name'] in heroes_to_label:
-            texts.append(plt.text(row['total_picks'], row['win_rate'], row['hero_name'], fontsize=9, fontweight='bold'))
+            # Jitter + initial y-offset (2.0) helps labels start outside the large dots
+            jx = row['total_picks'] + rng.uniform(-0.1, 0.1)
+            jy = row['win_rate'] + 2.0 + rng.uniform(-0.1, 0.1)
+            texts.append(plt.text(jx, jy, row['hero_name'], fontsize=9, fontweight='bold'))
     
-    adjust_text(texts, arrowprops=dict(arrowstyle='-', color='gray', alpha=0.5))
+    adjust_text(
+        texts, 
+        expand_points=(2.5, 2.5), 
+        expand_text=(1.5, 1.5),
+        force_points=1.0,
+        force_text=1.5,
+        arrowprops=dict(arrowstyle='->', color='gray', alpha=0.5)
+    )
 
     plt.title(f"Dota 2 Pro Meta ({patch_name}): Win Rate vs. Popularity {date_label}\n(n={len(df)} heroes)", fontsize=16, fontweight='bold')
     plt.xlabel("Total Picks (Popularity)", fontsize=12)
