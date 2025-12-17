@@ -11,32 +11,46 @@ import tomllib
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Load config
 with open("patch_config.toml", "rb") as f:
     config = tomllib.load(f)
 
-START_TIMESTAMP = config["current_meta"]["start_timestamp"]
+# Construct list of all patches (current + history)
+ALL_PATCHES = [config["current_meta"]] + config.get("patch_history", [])
 
-def train_and_predict():
+def train_for_patch(patch):
     """
-    Trains a Logistic Regression model to predict match outcomes based on draft composition.
-    Features: One-hot encoded vectors of Radiant (+1) vs Dire (-1) hero picks.
+    Trains a Logistic Regression model for a specific patch.
     """
-    print("🧠 Initializing model training pipeline...")
+    patch_name = patch['patch_name']
+    start_ts = patch['start_timestamp']
+    end_ts = patch.get('end_timestamp') # None for current
+    patch_id = patch['patch_id']
+    
+    print(f"🧠 Training model for patch {patch_name}...")
     engine = create_engine(DATABASE_URL)
 
-    query = """
+    # Date filter logic
+    if end_ts:
+        date_clause = "m.match_date >= to_timestamp(%(start_ts)s) AND m.match_date <= to_timestamp(%(end_ts)s)"
+        params = {"start_ts": start_ts, "end_ts": end_ts}
+    else:
+        date_clause = "m.match_date >= to_timestamp(%(start_ts)s)"
+        params = {"start_ts": start_ts}
+
+    query = f"""
     SELECT m.match_id, m.radiant_win, pb.hero_id, pb.team
     FROM analytics.match_summary m
     JOIN analytics.picks_bans pb ON m.match_id = pb.match_id
     WHERE pb.is_pick IS TRUE
-    AND m.match_date >= to_timestamp(%(start_timestamp)s);
+    AND {date_clause};
     """
     
     with engine.connect() as conn:
-        raw_df = pd.read_sql(query, conn, params={"start_timestamp": START_TIMESTAMP})
+        raw_df = pd.read_sql(query, conn, params=params)
 
     if raw_df.empty:
-        print("❌ Insufficient training data (Current Patch).")
+        print(f"❌ Insufficient training data for {patch_name}.")
         return
 
     # Pivot data for one-hot encoding
@@ -86,7 +100,7 @@ def train_and_predict():
     
     weights_df = weights_df.sort_values(by='coefficient', ascending=False)
     
-    output_file = "draft_weights.csv"
+    output_file = f"draft_weights_{patch_id}.csv"
     weights_df.to_csv(output_file, index=False)
     print(f"✅ Draft weights saved to {output_file}")
 
@@ -97,4 +111,5 @@ def train_and_predict():
     print(weights_df.tail(5))
 
 if __name__ == "__main__":
-    train_and_predict()
+    for patch in ALL_PATCHES:
+        train_for_patch(patch)

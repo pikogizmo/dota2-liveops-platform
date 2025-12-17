@@ -214,7 +214,7 @@ def generate_patch_charts(engine, patch, is_current=False):
     charts['bar'] = fig_to_html(fig_bar)
     
     # --- Model Weights Chart ---
-    weights_file = "draft_weights.csv"
+    weights_file = f"draft_weights_{patch.get('patch_id', '')}.csv"
     if os.path.exists(weights_file):
         try:
             weights_df = pd.read_csv(weights_file)
