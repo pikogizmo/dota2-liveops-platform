@@ -1,4 +1,10 @@
 [current_meta]
+patch_name = "7.40"
+start_timestamp = 1765843200  # Dec 16, 2025
+patch_id = 59
+
+[[patch_history]]
 patch_name = "7.39e"
 start_timestamp = 1759363200  # Oct 2, 2025
+end_timestamp = 1765843199    # Dec 15, 2025 23:59:59
 patch_id = 58

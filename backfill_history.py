@@ -16,8 +16,8 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 OPENDOTA_API_KEY = os.getenv("OPENDOTA_API_KEY")
 
 # Constants
-PATCH_START_TIME = 1759363200  # Oct 2, 2025 UTC - the start of 7.39e
-TARGET_PATCH_ID = 58
+PATCH_START_TIME = 1765843200  # Dec 16, 2025 UTC - the start of 7.40
+TARGET_PATCH_ID = 59
 
 def get_db_engine():
     if not DATABASE_URL:
@@ -115,7 +115,7 @@ def save_match_details(engine, match_data):
 def main():
     engine = get_db_engine()
     
-    print(f"Starting backfill for patch 7.39e (Start Time: {PATCH_START_TIME})")
+    print(f"Starting backfill for patch 7.40 (Start Time: {PATCH_START_TIME})")
     
     last_match_id = None
     valid_matches_found = []
