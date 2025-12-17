@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
+import json
+import uuid
 from sqlalchemy import create_engine
 from adjustText import adjust_text
 from dotenv import load_dotenv
@@ -25,6 +27,35 @@ ALL_PATCHES = [CURRENT_PATCH] + PATCH_HISTORY
 
 def get_engine():
     return create_engine(DATABASE_URL)
+
+def clean_fig(fig):
+    """Convert figure to dict and recursively clean numpy arrays to lists."""
+    d = fig.to_dict()
+    
+    def clean_recursive(obj):
+        if isinstance(obj, dict):
+            return {k: clean_recursive(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+             return [clean_recursive(x) for x in obj]
+        elif isinstance(obj, (np.ndarray, pd.Series)):
+             return obj.tolist()
+        else:
+             return obj
+             
+    return clean_recursive(d)
+
+def fig_to_html(fig):
+    """Serialize figure to HTML manually to bypass Plotly binary optimization."""
+    clean_dict = clean_fig(fig)
+    div_id = "chart_" + str(uuid.uuid4()).replace("-", "")
+    data_json = json.dumps(clean_dict['data'])
+    layout_json = json.dumps(clean_dict['layout'])
+    return f'''
+    <div id="{div_id}" class="plotly-graph-div"></div>
+    <script>
+        Plotly.newPlot("{div_id}", {data_json}, {layout_json}, {{responsive: true}});
+    </script>
+    '''
 
 def generate_patch_charts(engine, patch, is_current=False):
     """Generate all charts for a single patch. Returns dict of Plotly figure HTML strings."""
@@ -126,7 +157,7 @@ def generate_patch_charts(engine, patch, is_current=False):
         xaxis_title="Total Picks",
         yaxis_title="Win Rate %"
     )
-    charts['scatter'] = fig_scatter.to_html(full_html=False, include_plotlyjs=False)
+    charts['scatter'] = fig_to_html(fig_scatter)
     
     # --- Bar Chart (Top 10 Win Rate) ---
     top_10_win = df.nlargest(10, 'win_rate').copy()
@@ -155,7 +186,7 @@ def generate_patch_charts(engine, patch, is_current=False):
     
     fig_bar.update_layout(height=500, showlegend=False, autosize=True)
     fig_bar.update_yaxes(range=[0, 100])
-    charts['bar'] = fig_bar.to_html(full_html=False, include_plotlyjs=False)
+    charts['bar'] = fig_to_html(fig_bar)
     
     # --- Model Weights Chart ---
     weights_file = "draft_weights.csv"
@@ -187,7 +218,7 @@ def generate_patch_charts(engine, patch, is_current=False):
                 text=combined_weights['hover_text'],
                 hovertemplate="%{text}<extra></extra>"
             )
-            charts['weights'] = fig_weights.to_html(full_html=False, include_plotlyjs=False)
+            charts['weights'] = fig_to_html(fig_weights)
         except Exception as e:
             print(f"⚠️ Failed to generate weights chart: {e}")
     
@@ -241,7 +272,7 @@ def generate_patch_charts(engine, patch, is_current=False):
                 text=synergy_df['hover_text'],
                 hovertemplate="%{text}<extra></extra>"
             )
-            charts['synergy'] = fig_synergy.to_html(full_html=False, include_plotlyjs=False)
+            charts['synergy'] = fig_to_html(fig_synergy)
     except Exception as e:
         print(f"⚠️ Failed to generate synergy chart: {e}")
     
