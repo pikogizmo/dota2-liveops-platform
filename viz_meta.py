@@ -81,15 +81,23 @@ def generate_patch_charts(engine, patch, is_current=False):
     if df.empty:
         return None, f"Not enough data for {patch_name}"
     
+    # Debug data stats
+    print(f"[{patch_name}] Data Stats:")
+    print(f"  Rows: {len(df)}")
+    print(df[['total_picks', 'win_rate']].describe())
+    
     charts = {}
     
     # Scatter Chart
+    # Force float type to ensure Plotly handles it correctly
+    df['win_rate'] = df['win_rate'].astype(float)
+    df['total_picks'] = df['total_picks'].astype(int)
+    
     fig_scatter = px.scatter(
         df,
         x="total_picks",
         y="win_rate",
         hover_name="hero_name",
-        # Removed size="total_picks" because huge variance makes small bubbles invisible
         color="win_rate",
         color_continuous_scale="RdYlGn",
         title=f"<b>Meta Scatter ({patch_name}): Win Rate vs. Popularity</b> {date_label}",
@@ -102,11 +110,18 @@ def generate_patch_charts(engine, patch, is_current=False):
         hovertemplate="<b>%{hovertext}</b><br>Picks: %{x}<br>Win Rate: %{y:.1f}%<extra></extra>"
     )
     
+    # Fix 2: Explicitly set axis ranges based on data
+    x_max = df['total_picks'].max() * 1.1
+    y_min = max(0, df['win_rate'].min() - 5)
+    y_max = min(100, df['win_rate'].max() + 5)
+    
     fig_scatter.update_layout(
         height=600, 
         showlegend=False, 
         autosize=True,
-        margin=dict(l=50, r=50, t=80, b=50)
+        margin=dict(l=50, r=50, t=80, b=50),
+        xaxis=dict(range=[0, x_max]),
+        yaxis=dict(range=[y_min, y_max])
     )
     charts['scatter'] = fig_scatter.to_html(full_html=False, include_plotlyjs=False)
     
@@ -123,7 +138,7 @@ def generate_patch_charts(engine, patch, is_current=False):
         labels={"hero_name": "Hero", "win_rate": "Win Rate", "total_picks": "Total Picks"}
     )
     
-    # Fix 2: Repair broken hover template
+    # Fix 3: Repair broken hover template
     fig_bar.update_traces(
         hovertemplate="<b>%{x}</b><br>Win Rate: %{y:.1f}%<br>Picks: %{customdata[0]}<extra></extra>"
     )
