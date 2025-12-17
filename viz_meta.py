@@ -89,13 +89,25 @@ def generate_patch_charts(engine, patch, is_current=False):
         x="total_picks",
         y="win_rate",
         hover_name="hero_name",
-        size="total_picks",
+        # Removed size="total_picks" because huge variance makes small bubbles invisible
         color="win_rate",
         color_continuous_scale="RdYlGn",
         title=f"<b>Meta Scatter ({patch_name}): Win Rate vs. Popularity</b> {date_label}",
-        labels={"total_picks": "Total Picks", "win_rate": "Win Rate %"}
+        labels={"total_picks": "Total Picks", "win_rate": "Win Rate"}
     )
-    fig_scatter.update_layout(height=600, showlegend=False)
+    
+    # Fix 1: Set explicit marker size so dots are always visible
+    fig_scatter.update_traces(
+        marker=dict(size=12, line=dict(width=1, color='DarkSlateGrey'), opacity=0.8),
+        hovertemplate="<b>%{hovertext}</b><br>Picks: %{x}<br>Win Rate: %{y:.1f}%<extra></extra>"
+    )
+    
+    fig_scatter.update_layout(
+        height=600, 
+        showlegend=False, 
+        autosize=True,
+        margin=dict(l=50, r=50, t=80, b=50)
+    )
     charts['scatter'] = fig_scatter.to_html(full_html=False, include_plotlyjs=False)
     
     # Bar Chart (Top 10 Win Rate)
@@ -108,9 +120,15 @@ def generate_patch_charts(engine, patch, is_current=False):
         color="win_rate",
         color_continuous_scale="RdYlGn",
         title=f"<b>Top 10 Highest Win Rate Heroes ({patch_name})</b> {date_label}",
-        labels={"hero_name": "Hero", "win_rate": "Win Rate %", "total_picks": "Total Picks"}
+        labels={"hero_name": "Hero", "win_rate": "Win Rate", "total_picks": "Total Picks"}
     )
-    fig_bar.update_layout(height=500, showlegend=False)
+    
+    # Fix 2: Repair broken hover template
+    fig_bar.update_traces(
+        hovertemplate="<b>%{x}</b><br>Win Rate: %{y:.1f}%<br>Picks: %{customdata[0]}<extra></extra>"
+    )
+    
+    fig_bar.update_layout(height=500, showlegend=False, autosize=True)
     fig_bar.update_yaxes(range=[0, 100])
     charts['bar'] = fig_bar.to_html(full_html=False, include_plotlyjs=False)
     
@@ -133,7 +151,8 @@ def generate_patch_charts(engine, patch, is_current=False):
                 title=f"<b>Meta Impact: Hero Draft Weights ({patch_name})</b>",
                 labels={"coefficient": "Draft Impact (Log Odds)", "hero_name": "Hero"}
             )
-            fig_weights.update_layout(height=600, showlegend=False)
+            fig_weights.update_layout(height=600, showlegend=False, autosize=True)
+            fig_weights.update_traces(hovertemplate="<b>%{y}</b><br>Impact: %{x:.3f}<extra></extra>")
             charts['weights'] = fig_weights.to_html(full_html=False, include_plotlyjs=False)
         except Exception as e:
             print(f"⚠️ Failed to generate weights chart: {e}")
@@ -172,9 +191,9 @@ def generate_patch_charts(engine, patch, is_current=False):
                 color="win_rate",
                 color_continuous_scale="RdYlGn",
                 title=f"<b>Top 15 Best Hero Combos (Synergy)</b> {date_label}",
-                labels={"win_rate": "Win Rate %", "combo_name": "Hero Duo", "matches_played": "Matches"}
+                labels={"win_rate": "Win Rate", "combo_name": "Hero Duo", "matches_played": "Matches"}
             )
-            fig_synergy.update_layout(height=600, showlegend=False)
+            fig_synergy.update_layout(height=600, showlegend=False, autosize=True)
             fig_synergy.update_yaxes(autorange="reversed")
             charts['synergy'] = fig_synergy.to_html(full_html=False, include_plotlyjs=False)
     except Exception as e:
@@ -373,6 +392,11 @@ def generate_meta_chart():
                 // Show selected tab and mark button as active
                 document.getElementById(patchId).style.display = "block";
                 evt.currentTarget.className += " active";
+                
+                // Trigger resize for Plotly charts (wait slightly for display:block to take effect)
+                setTimeout(function() {{
+                   window.dispatchEvent(new Event('resize'));
+                }}, 50);
             }}
         </script>
     </body>
