@@ -96,7 +96,7 @@ def generate_patch_charts(engine, patch, is_current=False):
     
     # Use lower thresholds for current patch (less data available)
     min_picks = 3 if is_current else 12
-    min_synergy_matches = 5 if is_current else 15
+    min_synergy_matches = 10 if is_current else 25
     end_ts = patch.get("end_timestamp")  # None for current patch
     
     # Date filter SQL
