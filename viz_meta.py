@@ -256,11 +256,14 @@ def generate_patch_charts(engine, patch, is_current=False):
         except Exception as e:
             print(f"Failed to generate weights chart: {e}")
     
-    # --- Synergy Chart ---
+    # --- Synergy Chart (Wilson Score Ranking) ---
+    # Fetch more combos than needed, then rank by Wilson Score Lower Bound
+    # to account for sample size and avoid rare 100% win rate combos dominating
     synergy_query = f"""
     SELECT 
         h1.hero_name || ' + ' || h2.hero_name as combo_name,
         count(*) as matches_played,
+        sum(case when pb1.is_winner then 1 else 0 end) as wins,
         round(avg(case when pb1.is_winner then 1 else 0 end) * 100, 2) as win_rate
     FROM analytics.picks_bans pb1
     JOIN analytics.picks_bans pb2 ON pb1.match_id = pb2.match_id AND pb1.team = pb2.team
@@ -273,7 +276,7 @@ def generate_patch_charts(engine, patch, is_current=False):
     GROUP BY 1
     HAVING count(*) >= {min_synergy_matches}
     ORDER BY win_rate DESC
-    LIMIT 15;
+    LIMIT 100;
     """
     
     try:
@@ -283,6 +286,22 @@ def generate_patch_charts(engine, patch, is_current=False):
         if not synergy_df.empty:
             synergy_df['win_rate'] = synergy_df['win_rate'].astype(float)
             synergy_df['matches_played'] = synergy_df['matches_played'].astype(int)
+            synergy_df['wins'] = synergy_df['wins'].astype(int)
+            
+            # Wilson Score Lower Bound (95% confidence)
+            # Formula: (p + z^2/2n - z*sqrt(p(1-p)/n + z^2/4n^2)) / (1 + z^2/n)
+            # where p = win proportion, n = sample size, z = 1.96 for 95% CI
+            z = 1.96
+            n = synergy_df['matches_played']
+            p = synergy_df['wins'] / n
+            
+            denominator = 1 + (z * z) / n
+            center = p + (z * z) / (2 * n)
+            spread = z * np.sqrt((p * (1 - p) / n) + (z * z) / (4 * n * n))
+            synergy_df['wilson_score'] = (center - spread) / denominator
+            
+            # Rank by Wilson Score and take top 15
+            synergy_df = synergy_df.nlargest(15, 'wilson_score')
             
             synergy_df['hover_text'] = (
                 "<b>" + synergy_df['combo_name'] + "</b><br>" +
