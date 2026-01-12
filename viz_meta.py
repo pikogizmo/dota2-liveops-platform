@@ -274,9 +274,7 @@ def generate_patch_charts(engine, patch, is_current=False):
     AND pb1.hero_id < pb2.hero_id
     AND {date_filter.replace('match_date', 'pb1.match_date')}
     GROUP BY 1
-    HAVING count(*) >= {min_synergy_matches}
-    ORDER BY win_rate DESC
-    LIMIT 100;
+    HAVING count(*) >= {min_synergy_matches};
     """
     
     try:
